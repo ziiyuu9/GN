@@ -1,24 +1,30 @@
-# Project Map
+# 專案結構地圖 (Project Map)
 
-此地圖用於追蹤系統各模組的狀態與關聯性。
-
-## 目錄架構
+本文件描述 GoodNight 專案的核心目錄與模組職責。
 
 ```text
-咕奈/
-├── docs/                 # 詳細開發手冊與系統設計文件
-├── source/               # 應用程式源代碼
-├── scripts/              # 自動化腳本存放區 (如 CI/CD, 環境建立)
-├── agents.md             # AI 與開發者協作規範
-├── changelog.md          # 變更日誌
-├── project_map.md        # 專案地圖 (本文件)
-└── readme.md             # 專案入口文件
+GoodNight/
+├── .git/                      # Git 版本控制
+├── agents.md                  # AI 與開發者協作規範指南
+├── changelog.md               # 版本更新日誌
+├── open.html                  # 本地網頁啟動導航
+├── project_map.md             # 專案目錄結構地圖 (本檔)
+├── readme.md                  # 專案說明與啟動指南
+├── docs/                      # 系統開發手冊
+│   ├── architecture.md        # 電腦與網路系統架構設計
+│   └── ui_ux_guidelines.md    # UI/UX 設計規範與指南
+├── scripts/                   # 自動化工作腳本 (PowerShell)
+│   ├── git_commit.ps1         # 自動化格式化與 Git 提交
+│   └── run_all_tests.ps1      # 自動化執行全覆蓋測試
+└── source/                    # 原始程式碼
+    ├── package.json           # Node.js 相依套件設定
+    ├── biome.json             # Biome 程式碼規範設定
+    ├── playwright.config.ts   # Playwright E2E 測試設定
+    ├── vite.config.ts         # Vitest 測試與 Vite 解析設定
+    ├── e2e/                   # E2E 測試資料夾
+    ├── src/                   # Next.js 前端核心
+    │   ├── app/               # App Router 頁面與全域樣式
+    │   ├── components/        # 可重用 React UI 元件
+    │   └── lib/               # 工具函數與 API 共用邏輯
+    └── tts_server/            # 本地 TTS (Text-to-Speech) 服務
 ```
-
-## 系統模組 (規劃中)
-*   **前端模組**: 待使用者指定。
-*   **後端模組**: 高併發 API 伺服器 (待規劃)。
-*   **資料庫**: 待規劃。
-*   **測試環境**: Playwright E2E + Vitest。
-
-*(當系統架構明確後，此文件將自動更新詳細的依賴關係圖與模組狀態)*

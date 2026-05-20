@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>啟動咕奈 Magic Storybook</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #0f172a;
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 3rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        h1 {
+            color: #a78bfa;
+            margin-bottom: 1rem;
+        }
+        p {
+            font-size: 1.1rem;
+            color: #cbd5e1;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        a.button {
+            display: inline-block;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        a.button:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+    </style>
+    <!-- 自動跳轉到本地伺服器 -->
+    <meta http-equiv="refresh" content="2; url=http://localhost:3000" />
+</head>
+<body>
+    <div class="container">
+        <h1>✨ 咕奈 Magic Storybook</h1>
+        <p>正在為您開啟網頁...<br>請確認您已經在終端機中執行了啟動指令（<code>npm run dev</code>）</p>
+        <a href="http://localhost:3000" class="button">手動前往網頁</a>
+    </div>
+</body>
+</html>
