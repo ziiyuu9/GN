@@ -16,7 +16,7 @@ export default defineConfig({
     exclude: ['node_modules', 'e2e/**'],
     setupFiles: [],
     coverage: {
-      all: true,
+      provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules', 'e2e/**'],

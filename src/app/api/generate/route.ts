@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { globalRateLimiter } from "@/lib/rate-limiter";
 
+const corsHeaders = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+	"Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 export async function POST(req: Request) {
 	try {
 		const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
@@ -8,7 +14,7 @@ export async function POST(req: Request) {
 		if (!globalRateLimiter.check(ip)) {
 			return NextResponse.json(
 				{ error: "Too many requests. Please slow down." },
-				{ status: 429 },
+				{ status: 429, headers: corsHeaders },
 			);
 		}
 
@@ -18,7 +24,7 @@ export async function POST(req: Request) {
 		if (!prompt) {
 			return NextResponse.json(
 				{ error: "Prompt is required" },
-				{ status: 400 },
+				{ status: 400, headers: corsHeaders },
 			);
 		}
 
@@ -35,7 +41,8 @@ export async function POST(req: Request) {
 			}),
 		});
 
-		if (!response.ok || !response.body) {
+		const bodyStream = response.body;
+		if (!response.ok || !bodyStream) {
 			throw new Error("Failed to connect to local Ollama instance.");
 		}
 
@@ -45,7 +52,7 @@ export async function POST(req: Request) {
 
 		// Process the stream asynchronously
 		(async () => {
-			const reader = response.body.getReader();
+			const reader = bodyStream.getReader();
 			const decoder = new TextDecoder();
 			const encoder = new TextEncoder();
 
@@ -80,13 +87,27 @@ export async function POST(req: Request) {
 			headers: {
 				"Content-Type": "text/plain; charset=utf-8",
 				"Transfer-Encoding": "chunked",
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+				"Access-Control-Allow-Headers": "Content-Type, Authorization",
 			},
 		});
 	} catch (error) {
 		console.error("API Error:", error);
 		return NextResponse.json(
 			{ error: "Internal Server Error or Ollama not running." },
-			{ status: 500 },
+			{ status: 500, headers: corsHeaders },
 		);
 	}
+}
+
+export async function OPTIONS() {
+	return new NextResponse(null, {
+		status: 200,
+		headers: {
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+			"Access-Control-Allow-Headers": "Content-Type, Authorization",
+		},
+	});
 }

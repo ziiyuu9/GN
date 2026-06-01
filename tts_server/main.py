@@ -37,6 +37,12 @@ async def clone_and_synthesize(
         print(f"收到聲音樣本: {voice_sample.filename}, 大小: {len(audio_bytes)} bytes")
         print(f"欲合成的文本: {text}")
 
+        # NOTE: This is a mock TTS endpoint for local testing only.
+        # The real Fish Speech TTS server is implemented in
+        # source/tts_server/fish-speech/tools/api_server.py and exposes /v1/tts.
+        # This stub returns silent WAV audio; to get actual cloned audio,
+        # start the real Fish Speech server and point LOCAL_TTS_BASE_URL at it.
+        
         # FIXME: 這裡將整合真實的 Fish Speech Inference
         # 目前暫時返回一個假的 Audio 檔案 (這裡用簡單的空 wav 標頭代替，實際需回傳真實 wav)
         # TODO: 使用模型將 audio_bytes 轉換為 speaker embedding，並用 text 進行語音合成
