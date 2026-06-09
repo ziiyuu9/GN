@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { globalRateLimiter } from "@/lib/rate-limiter";
+import { client } from "@gradio/client";
+
+export const maxDuration = 60; // 允許較長的 Vercel 執行時間
 
 const corsHeaders = {
 	"Access-Control-Allow-Origin": "*",
@@ -31,81 +34,55 @@ export async function POST(request: Request) {
 			);
 		}
 
-		const ttsBaseUrl =
-			process.env.LOCAL_TTS_BASE_URL || "http://localhost:8000";
-		const ttsApiPath = process.env.LOCAL_TTS_API_PATH || "/v1/tts";
-
+		console.log("Connecting to Hugging Face Gradio Space (tonyassi/voice-clone)...");
+		
 		try {
-			const audioBuffer = await audioBlob.arrayBuffer();
-			const audioBase64 = Buffer.from(audioBuffer).toString("base64");
-			const ttsBody = {
-				text: storyText,
-				references: [
-					{
-						text: "reference voice sample",
-						audio: audioBase64,
-					},
-				],
-				format: "wav",
-			};
+			// 初始化 Gradio Client
+			const app = await client("tonyassi/voice-clone");
+			
+			// 呼叫語音複製預測介面
+			// 根據 API 文件，輸入為: [text, audio Blob]
+			const result = await app.predict("/clone", [
+				storyText,
+				audioBlob,
+			]);
 
-			const ttsResponse = await fetch(`${ttsBaseUrl}${ttsApiPath}`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(ttsBody),
-				signal: AbortSignal.timeout(30000),
-			});
+			// Gradio 回傳的 result.data 是一個陣列，包含音檔物件
+			const outputData = result.data as any[];
+			const audioUrl = outputData[0]?.url;
 
-			if (!ttsResponse.ok) {
-				throw new Error(
-					`Local TTS server failed to process request: ${ttsResponse.status}`,
-				);
+			if (!audioUrl) {
+				throw new Error("Gradio response did not contain audio URL.");
 			}
 
-			const audioBufferOut = await ttsResponse.arrayBuffer();
+			// 取得產生的音檔內容
+			const audioResponse = await fetch(audioUrl);
+			if (!audioResponse.ok) {
+				throw new Error("Failed to fetch generated audio from Hugging Face.");
+			}
+			const audioBufferOut = await audioResponse.arrayBuffer();
 			const audioBase64Out = Buffer.from(audioBufferOut).toString("base64");
 
 			return NextResponse.json(
 				{ audioBase64: audioBase64Out },
-				{
-					headers: {
-						"Access-Control-Allow-Origin": "*",
-						"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-						"Access-Control-Allow-Headers": "Content-Type, Authorization",
-					},
-				}
+				{ headers: corsHeaders }
 			);
 		} catch (error) {
-			console.warn("⚠️ Local TTS server is not reachable.", error);
+			console.warn("⚠️ Hugging Face 雲端語音服務無法連線或逾時。", error);
 			await new Promise((resolve) => setTimeout(resolve, 1200));
 			return NextResponse.json(
 				{
 					audioBase64: null,
-					message: "本地語音服務無法連線，請啟動本地 TTS 服務。",
+					message: "雲端語音生成逾時或排隊人數過多，請稍後重試。 (Hugging Face Spaces Queue Full)",
 				},
-				{
-					headers: {
-						"Access-Control-Allow-Origin": "*",
-						"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-						"Access-Control-Allow-Headers": "Content-Type, Authorization",
-					},
-				}
+				{ headers: corsHeaders }
 			);
 		}
 	} catch (error) {
 		console.error("Error in clone-voice route:", error);
 		return NextResponse.json(
 			{ error: "Failed to process voice" },
-			{
-				status: 500,
-				headers: {
-					"Access-Control-Allow-Origin": "*",
-					"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-					"Access-Control-Allow-Headers": "Content-Type, Authorization",
-				},
-			}
+			{ status: 500, headers: corsHeaders },
 		);
 	}
 }
@@ -113,10 +90,6 @@ export async function POST(request: Request) {
 export async function OPTIONS() {
 	return new NextResponse(null, {
 		status: 200,
-		headers: {
-			"Access-Control-Allow-Origin": "*",
-			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type, Authorization",
-		},
+		headers: corsHeaders,
 	});
 }
