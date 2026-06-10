@@ -1,6 +1,6 @@
+import { Client } from "@gradio/client";
 import { NextResponse } from "next/server";
 import { globalRateLimiter } from "@/lib/rate-limiter";
-import { client } from "@gradio/client";
 
 export const maxDuration = 60; // 允許較長的 Vercel 執行時間
 
@@ -9,6 +9,9 @@ const corsHeaders = {
 	"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 	"Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
+
+const VOICE_CLONE_SPACE =
+	process.env.VOICE_CLONE_SPACE || "tonyassi/voice-clone";
 
 export async function POST(request: Request) {
 	const ip =
@@ -34,22 +37,23 @@ export async function POST(request: Request) {
 			);
 		}
 
-		console.log("Connecting to Hugging Face Gradio Space (tonyassi/voice-clone)...");
-		
-		try {
-			// 初始化 Gradio Client
-			const app = await client("tonyassi/voice-clone");
-			
-			// 呼叫語音複製預測介面
-			// 根據 API 文件，輸入為: [text, audio Blob]
-			const result = await app.predict("/clone", [
-				storyText,
-				audioBlob,
-			]);
+		console.log(
+			`Connecting to Hugging Face Gradio Space (${VOICE_CLONE_SPACE})...`,
+		);
 
-			// Gradio 回傳的 result.data 是一個陣列，包含音檔物件
-			const outputData = result.data as any[];
-			const audioUrl = outputData[0]?.url;
+		try {
+			// HF_TOKEN 可選；ZeroGPU Space 匿名呼叫有配額限制，帶 token 較穩定
+			const hfToken = process.env.HF_TOKEN;
+			const app = await Client.connect(
+				VOICE_CLONE_SPACE,
+				hfToken ? { token: hfToken as `hf_${string}` } : undefined,
+			);
+
+			// endpoint 以 Space 的函式名命名（def clone(text, audio)），輸入為 [text, audio]
+			const result = await app.predict("/clone", [storyText, audioBlob]);
+
+			const outputData = result.data as Array<{ url?: string }>;
+			const audioUrl = outputData?.[0]?.url;
 
 			if (!audioUrl) {
 				throw new Error("Gradio response did not contain audio URL.");
@@ -65,17 +69,17 @@ export async function POST(request: Request) {
 
 			return NextResponse.json(
 				{ audioBase64: audioBase64Out },
-				{ headers: corsHeaders }
+				{ headers: corsHeaders },
 			);
 		} catch (error) {
 			console.warn("⚠️ Hugging Face 雲端語音服務無法連線或逾時。", error);
-			await new Promise((resolve) => setTimeout(resolve, 1200));
 			return NextResponse.json(
 				{
 					audioBase64: null,
-					message: "雲端語音生成逾時或排隊人數過多，請稍後重試。 (Hugging Face Spaces Queue Full)",
+					message:
+						"雲端語音生成失敗：Space 排隊滿載或 GPU 配額用盡，請稍後重試。（可在 .env.local 設定 HF_TOKEN 提高配額）",
 				},
-				{ headers: corsHeaders }
+				{ headers: corsHeaders },
 			);
 		}
 	} catch (error) {

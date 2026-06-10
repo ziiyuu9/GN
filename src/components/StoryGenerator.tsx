@@ -56,7 +56,8 @@ export function StoryGenerator() {
 				style={{
 					width: "100%",
 					maxWidth: "780px",
-					background: "linear-gradient(180deg, #fff9f1 0%, #f7efe1 48%, #f2e4d4 100%)",
+					background:
+						"linear-gradient(180deg, #fff9f1 0%, #f7efe1 48%, #f2e4d4 100%)",
 					border: "1px solid rgba(156, 121, 80, 0.28)",
 					borderRadius: "40px",
 					boxShadow: "0 38px 100px rgba(15, 23, 42, 0.14)",
@@ -84,7 +85,8 @@ export function StoryGenerator() {
 						right: "1.25rem",
 						width: "60px",
 						height: "60px",
-						background: "radial-gradient(circle at center, rgba(255,255,255,0.75), rgba(255,255,255,0) 55%)",
+						background:
+							"radial-gradient(circle at center, rgba(255,255,255,0.75), rgba(255,255,255,0) 55%)",
 						borderRadius: "50%",
 					}}
 				/>
@@ -96,7 +98,8 @@ export function StoryGenerator() {
 						width: "84px",
 						height: "84px",
 						borderRadius: "28px",
-						background: "linear-gradient(135deg, rgba(255, 235, 202, 0.8), rgba(255, 255, 255, 0.1))",
+						background:
+							"linear-gradient(135deg, rgba(255, 235, 202, 0.8), rgba(255, 255, 255, 0.1))",
 						border: "1px solid rgba(156, 121, 80, 0.15)",
 					}}
 				/>
@@ -121,13 +124,36 @@ export function StoryGenerator() {
 						background: "rgba(156, 121, 80, 0.18)",
 					}}
 				/>
-				<div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
-					<div style={{ width: "14px", height: "14px", borderRadius: "50%", background: "#b58847" }} />
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: "1rem",
+						marginBottom: "1.5rem",
+					}}
+				>
+					<div
+						style={{
+							width: "14px",
+							height: "14px",
+							borderRadius: "50%",
+							background: "#b58847",
+						}}
+					/>
 					<div>
-						<div style={{ color: "#8d6c4d", fontSize: "0.85rem", letterSpacing: "0.14em", textTransform: "uppercase" }}>
+						<div
+							style={{
+								color: "#8d6c4d",
+								fontSize: "0.85rem",
+								letterSpacing: "0.14em",
+								textTransform: "uppercase",
+							}}
+						>
 							神奇故事書
 						</div>
-						<div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#3d2b17" }}>
+						<div
+							style={{ fontSize: "1.65rem", fontWeight: 700, color: "#3d2b17" }}
+						>
 							創造專屬的床邊故事
 						</div>
 					</div>
@@ -138,11 +164,31 @@ export function StoryGenerator() {
 					style={{ display: "grid", gap: "1.3rem" }}
 				>
 					<div style={{ display: "grid", gap: "0.75rem" }}>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-							<span style={{ color: "#7e5d3d", fontSize: "0.95rem", fontWeight: 600 }}>
+						<div
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								gap: "1rem",
+							}}
+						>
+							<span
+								style={{
+									color: "#7e5d3d",
+									fontSize: "0.95rem",
+									fontWeight: 600,
+								}}
+							>
 								您想聽什麼樣的故事？
 							</span>
-							<label style={{ display: "flex", alignItems: "center", gap: "0.5rem", margin: 0 }}>
+							<label
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: "0.5rem",
+									margin: 0,
+								}}
+							>
 								<input
 									type="checkbox"
 									checked={useRandom}
@@ -158,7 +204,11 @@ export function StoryGenerator() {
 							</label>
 						</div>
 						<textarea
-							placeholder={useRandom ? "系統將自動為您挑選一個精美的故事主題..." : "請輸入任何您想加入故事的元素！\n例如：「小兔子、永不放棄的精神、森林冒險」\n或：「喜歡發明的小男孩遇到了怕黑的龍，學會勇敢」"}
+							placeholder={
+								useRandom
+									? "系統將自動為您挑選一個精美的故事主題..."
+									: "請輸入任何您想加入故事的元素！\n例如：「小兔子、永不放棄的精神、森林冒險」\n或：「喜歡發明的小男孩遇到了怕黑的龍，學會勇敢」"
+							}
 							value={prompt}
 							onChange={(e) => {
 								setPrompt(e.target.value);
@@ -196,12 +246,15 @@ export function StoryGenerator() {
 							border: "none",
 							padding: "1rem 2rem",
 							borderRadius: "999px",
-							cursor: isGenerating || (!useRandom && !prompt.trim()) ? "not-allowed" : "pointer",
+							cursor:
+								isGenerating || (!useRandom && !prompt.trim())
+									? "not-allowed"
+									: "pointer",
 							fontSize: "1.1rem",
 							fontWeight: 700,
 							boxShadow: "0 16px 32px rgba(155, 118, 209, 0.22)",
 							transition: "transform 0.2s ease, box-shadow 0.2s ease",
-							marginTop: "0.5rem"
+							marginTop: "0.5rem",
 						}}
 					>
 						{isGenerating ? "正在為您編織故事..." : "✨ 施展魔法，產生故事"}
@@ -227,7 +280,8 @@ export function StoryGenerator() {
 					style={{
 						width: "100%",
 						maxWidth: "780px",
-						background: "linear-gradient(180deg, #fff8ef 0%, #fff1de 35%, #f8e3cf 100%)",
+						background:
+							"linear-gradient(180deg, #fff8ef 0%, #fff1de 35%, #f8e3cf 100%)",
 						border: "1px solid rgba(167, 128, 88, 0.2)",
 						borderRadius: "42px",
 						boxShadow: "0 32px 90px rgba(15, 23, 42, 0.14)",
@@ -262,7 +316,8 @@ export function StoryGenerator() {
 							width: "110px",
 							height: "110px",
 							borderRadius: "999px",
-							background: "radial-gradient(circle at 40% 40%, rgba(255,255,255,0.8), rgba(255,255,255,0) 60%)",
+							background:
+								"radial-gradient(circle at 40% 40%, rgba(255,255,255,0.8), rgba(255,255,255,0) 60%)",
 						}}
 					/>
 					<div
@@ -287,15 +342,38 @@ export function StoryGenerator() {
 							background: "rgba(255, 235, 205, 0.35)",
 						}}
 					/>
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-						<div style={{ color: "#8d6b4b", fontSize: "0.95rem", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>
+					<div
+						style={{
+							display: "flex",
+							justifyContent: "space-between",
+							alignItems: "center",
+							marginBottom: "1.5rem",
+						}}
+					>
+						<div
+							style={{
+								color: "#8d6b4b",
+								fontSize: "0.95rem",
+								letterSpacing: "0.12em",
+								textTransform: "uppercase",
+								fontWeight: 600,
+							}}
+						>
 							📖 床邊故事書
 						</div>
 						<div style={{ color: "#b08a5f", fontSize: "0.9rem" }}>
 							為您專屬生成
 						</div>
 					</div>
-					<div style={{ whiteSpace: "pre-wrap", textIndent: "2em", fontSize: "1.1rem" }}>{story}</div>
+					<div
+						style={{
+							whiteSpace: "pre-wrap",
+							textIndent: "2em",
+							fontSize: "1.1rem",
+						}}
+					>
+						{story}
+					</div>
 				</motion.div>
 			)}
 		</div>

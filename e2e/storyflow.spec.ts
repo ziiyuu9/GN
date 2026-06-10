@@ -16,12 +16,12 @@ test.describe("GoodNight UI Flow", () => {
 		await expect(
 			page.locator("h2").filter({ hasText: "生成床邊故事" }),
 		).toBeVisible();
-		const storyInput = page.locator(
-			'input[placeholder="例如：一隻勇敢探索星空的貓咪..."]',
-		);
+		const storyInput = page.getByLabel("故事關鍵字");
 		await expect(storyInput).toBeVisible();
 
-		const generateBtn = page.locator('button:has-text("開始說故事")');
+		const generateBtn = page.getByRole("button", {
+			name: /施展魔法，產生故事/,
+		});
 		await expect(generateBtn).toBeVisible();
 		await expect(generateBtn).toBeDisabled(); // 預設為停用（因未輸入內容）
 
@@ -29,7 +29,16 @@ test.describe("GoodNight UI Flow", () => {
 		await storyInput.fill("一隻勇敢的 Cyberpunk 貓咪");
 		await expect(generateBtn).toBeEnabled();
 
-		// 驗證「高擬真語音合成」區塊
+		// 清空後改勾「給我一個驚喜 (隨機)」也應啟用按鈕，且輸入框停用
+		await storyInput.fill("");
+		await expect(generateBtn).toBeDisabled();
+		const randomCheckbox = page.getByRole("checkbox");
+		await randomCheckbox.check();
+		await expect(generateBtn).toBeEnabled();
+		await expect(storyInput).toBeDisabled();
+		await randomCheckbox.uncheck();
+
+		// 驗證「克隆語音合成」區塊
 		await expect(
 			page.locator("h2").filter({ hasText: "克隆語音合成" }),
 		).toBeVisible();
@@ -38,8 +47,12 @@ test.describe("GoodNight UI Flow", () => {
 		);
 		await expect(textInput).toBeVisible();
 
-		const synthBtn = page.locator('button:has-text("生成克隆語音")');
+		const synthBtn = page.getByRole("button", { name: "生成克隆語音" });
 		await expect(synthBtn).toBeVisible();
 		await expect(synthBtn).toBeDisabled(); // 預設為停用（因未輸入內容且未上傳檔案）
+
+		// 錄音按鈕應存在
+		await expect(page.getByRole("button", { name: "開始錄音" })).toBeVisible();
+		await expect(page.getByRole("button", { name: "停止錄音" })).toBeDisabled();
 	});
 });
