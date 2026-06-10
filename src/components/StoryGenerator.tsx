@@ -5,8 +5,6 @@ import { useState } from "react";
 
 export function StoryGenerator() {
 	const [prompt, setPrompt] = useState("");
-	const [education, setEducation] = useState("");
-	const [provider, setProvider] = useState("ollama");
 	const [story, setStory] = useState("");
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [error, setError] = useState("");
@@ -15,7 +13,7 @@ export function StoryGenerator() {
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!useRandom && !prompt.trim()) {
-			setError("請輸入故事關鍵字或啟用隨機生成。\uD83C\uDF81");
+			setError("請輸入故事關鍵字或啟用隨機生成。🎁");
 			return;
 		}
 
@@ -27,7 +25,7 @@ export function StoryGenerator() {
 			const res = await fetch("/api/generate-story", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ keyword: prompt, education, provider, random: useRandom }),
+				body: JSON.stringify({ keyword: prompt, random: useRandom }),
 			});
 
 			const data = await res.json();
@@ -127,10 +125,10 @@ export function StoryGenerator() {
 					<div style={{ width: "14px", height: "14px", borderRadius: "50%", background: "#b58847" }} />
 					<div>
 						<div style={{ color: "#8d6c4d", fontSize: "0.85rem", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-							故事書頁面
+							神奇故事書
 						</div>
 						<div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#3d2b17" }}>
-							開始你的床邊故事
+							創造專屬的床邊故事
 						</div>
 					</div>
 				</div>
@@ -142,7 +140,7 @@ export function StoryGenerator() {
 					<div style={{ display: "grid", gap: "0.75rem" }}>
 						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
 							<span style={{ color: "#7e5d3d", fontSize: "0.95rem", fontWeight: 600 }}>
-								故事關鍵字
+								您想聽什麼樣的故事？
 							</span>
 							<label style={{ display: "flex", alignItems: "center", gap: "0.5rem", margin: 0 }}>
 								<input
@@ -155,13 +153,12 @@ export function StoryGenerator() {
 									style={{ width: "1rem", height: "1rem" }}
 								/>
 								<span style={{ color: "#8c7154", fontSize: "0.88rem" }}>
-									隨機生成故事
+									給我一個驚喜 (隨機)
 								</span>
 							</label>
 						</div>
-						<input
-							type="text"
-							placeholder={useRandom ? "系統將自動選擇故事主題" : "例如：勇敢的小狐狸、星空冒險、秘密魔法森林..."}
+						<textarea
+							placeholder={useRandom ? "系統將自動為您挑選一個精美的故事主題..." : "請輸入任何您想加入故事的元素！\n例如：「小兔子、永不放棄的精神、森林冒險」\n或：「喜歡發明的小男孩遇到了怕黑的龍，學會勇敢」"}
 							value={prompt}
 							onChange={(e) => {
 								setPrompt(e.target.value);
@@ -171,6 +168,7 @@ export function StoryGenerator() {
 							}}
 							disabled={isGenerating || useRandom}
 							aria-label="故事關鍵字"
+							rows={4}
 							style={{
 								width: "100%",
 								padding: "1rem 1.1rem",
@@ -178,75 +176,16 @@ export function StoryGenerator() {
 								border: "1px solid rgba(156, 121, 80, 0.28)",
 								background: useRandom ? "#f3efe6" : "#fffdf5",
 								color: "#3c2a18",
-								fontSize: "1rem",
+								fontSize: "1.05rem",
+								lineHeight: "1.5",
 								boxSizing: "border-box",
+								resize: "vertical",
 							}}
 						/>
 						<span style={{ color: "#8c7154", fontSize: "0.88rem" }}>
-							可輸入角色、場景或主題，例如「失落星辰的小狐狸」、「夜空中的音樂會」、「友誼魔法森林」。
+							AI 將根據您的關鍵字，寫出一篇富有教育意義且情節完整的優質故事。
 						</span>
 					</div>
-
-					<label style={{ display: "grid", gap: "0.5rem" }}>
-						<span style={{ color: "#7e5d3d", fontSize: "0.95rem", fontWeight: 600 }}>
-							教育價值
-						</span>
-						<input
-							type="text"
-							placeholder="例如：誠實、同理心、不要半途而廢..."
-							value={education}
-							onChange={(e) => {
-								setEducation(e.target.value);
-								if (error) {
-									setError("");
-								}
-							}}
-							disabled={isGenerating}
-							aria-label="教育價值"
-							style={{
-								width: "100%",
-								padding: "1rem 1.1rem",
-								borderRadius: "18px",
-								border: "1px solid rgba(156, 121, 80, 0.28)",
-								background: "#fffdf5",
-								color: "#3c2a18",
-								fontSize: "1rem",
-								boxSizing: "border-box",
-							}}
-						/>
-						<span style={{ color: "#8c7154", fontSize: "0.88rem" }}>
-							請輸入希望故事傳達的教學主題，例如誠實、堅持、同理心、責任感。
-						</span>
-					</label>
-
-					<label style={{ display: "grid", gap: "0.5rem" }}>
-						<span style={{ color: "#7e5d3d", fontSize: "0.95rem", fontWeight: 600 }}>
-							生成供應商
-						</span>
-						<select
-							value={provider}
-							onChange={(e) => setProvider(e.target.value)}
-							disabled={isGenerating}
-							style={{
-								width: "100%",
-								padding: "1rem 1.1rem",
-								borderRadius: "18px",
-								border: "1px solid rgba(156, 121, 80, 0.28)",
-								background: "#fffdf5",
-								color: "#3c2a18",
-								fontSize: "1rem",
-								boxSizing: "border-box",
-							}}
-						>
-							<option value="ollama">本地 Ollama</option>
-							<option value="text-generation-webui">
-								Text Generation WebUI（開源）
-							</option>
-						</select>
-						<span style={{ color: "#8c7154", fontSize: "0.88rem" }}>
-							如果你已經運行本地開源 WebUI，請選擇 Text Generation WebUI，並確認 STORY_BASE_URL 指向該服務。
-						</span>
-					</label>
 
 					<button
 						type="submit"
@@ -258,13 +197,14 @@ export function StoryGenerator() {
 							padding: "1rem 2rem",
 							borderRadius: "999px",
 							cursor: isGenerating || (!useRandom && !prompt.trim()) ? "not-allowed" : "pointer",
-							fontSize: "1rem",
+							fontSize: "1.1rem",
 							fontWeight: 700,
 							boxShadow: "0 16px 32px rgba(155, 118, 209, 0.22)",
 							transition: "transform 0.2s ease, box-shadow 0.2s ease",
+							marginTop: "0.5rem"
 						}}
 					>
-						{isGenerating ? "生成中..." : "開始說故事"}
+						{isGenerating ? "正在為您編織故事..." : "✨ 施展魔法，產生故事"}
 					</button>
 				</form>
 
@@ -291,7 +231,7 @@ export function StoryGenerator() {
 						border: "1px solid rgba(167, 128, 88, 0.2)",
 						borderRadius: "42px",
 						boxShadow: "0 32px 90px rgba(15, 23, 42, 0.14)",
-						padding: "2rem",
+						padding: "2.5rem 3rem",
 						color: "#3c2f20",
 						fontFamily: "Georgia, 'Times New Roman', serif",
 						lineHeight: 1.95,
@@ -347,15 +287,15 @@ export function StoryGenerator() {
 							background: "rgba(255, 235, 205, 0.35)",
 						}}
 					/>
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-						<div style={{ color: "#8d6b4b", fontSize: "0.9rem", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-							床邊故事書
+					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+						<div style={{ color: "#8d6b4b", fontSize: "0.95rem", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>
+							📖 床邊故事書
 						</div>
-						<div style={{ color: "#b08a5f", fontSize: "0.85rem" }}>
-							每次都是新的溫暖冒險
+						<div style={{ color: "#b08a5f", fontSize: "0.9rem" }}>
+							為您專屬生成
 						</div>
 					</div>
-					<div style={{ whiteSpace: "pre-wrap", textIndent: "1.4em" }}>{story}</div>
+					<div style={{ whiteSpace: "pre-wrap", textIndent: "2em", fontSize: "1.1rem" }}>{story}</div>
 				</motion.div>
 			)}
 		</div>

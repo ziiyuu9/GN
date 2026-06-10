@@ -22,12 +22,17 @@ export async function POST(request: Request) {
 	}
 
 	try {
-		const { keyword, education, random } = await request.json();
+		const { keyword, random } = await request.json();
 
 		const randomKeywords = [
-			"夢幻星辰森林", "勇敢的小狐狸", "秘密魔法城堡", "月光海洋冒險",
-			"彩虹雲端音樂會", "友誼勇氣之旅", "夜間動物派對", "星空守護者",
-			"魔法糖果花園", "小小發明家的奇遇"
+			"一隻想飛的胖企鵝 友誼與勇氣 冰山探險",
+			"怕黑的小恐龍 學習面對恐懼 神秘星辰洞穴",
+			"不會魔法的精靈 發現自己的長處 魔法森林",
+			"愛生氣的紅雲 學習情緒管理 天空之城",
+			"常常半途而廢的小松鼠 堅持到底 收集過冬果實",
+			"喜歡分享的小蜜蜂 團隊合作與分享 彩虹花園",
+			"說了謊的小木偶 誠實的力量 歡樂馬戲團",
+			"迷路的星星 同理心與互相幫助 夜空尋家"
 		];
 
 		const effectiveKeyword =
@@ -38,26 +43,17 @@ export async function POST(request: Request) {
 		if (!effectiveKeyword) {
 			return NextResponse.json({ error: "Keyword is required" }, { status: 400, headers: corsHeaders });
 		}
-
-		const teachingHint = education?.trim()
-			? `故事中請自然傳達教育價值：「${education}」。`
-			: `故事中請自然傳達正向教學主題，例如「不能輕易放棄」「不要半途而廢」「要誠實」「要有同理心」「勇於承擔責任」。`;
 			
-		const prompt = `你是一位專業兒童故事作家，請以關鍵字「${effectiveKeyword}」創作一個完整、合理且富有邏輯性的繁體中文睡前故事。故事要像 Google Gemini Storybook 一樣，並且必須：
-- 有清楚的劇情脈絡與因果關係
-- 角色擁有明確目標、情緒變化與成長
-- 事件間自然連接，不要突然跳轉或遺漏動機
-- 每個轉折都要推動故事前進，並帶出內心改變
+		const prompt = `你是一位專業的兒童睡前故事作家，專門為小朋友撰寫像 Google Gemini Storybook 那樣高品質、有教育意義且邏輯嚴謹的故事。
+現在有一位家長提供了以下關鍵字或主題：
+「${effectiveKeyword}」
 
-請分成四個段落，但僅輸出故事本身，不要寫出任何章節標題或說明：
-1. 起：介紹主角、陪伴角色、場景與願望或問題
-2. 承：描述主角遇到的挑戰、困難與內心掙扎
-3. 轉：刻畫主角採取行動、情緒變化與關鍵轉折
-4. 合：以溫暖、正向的方式解決問題，並留下自然的學習價值
+請根據上述家長給的提示，創作一個約 800-1000 字的繁體中文睡前故事。故事必須具備以下特點：
+1. 適合兒童：用語溫暖、生動、具象化，無任何暴力、恐怖或不適合兒童的情節。
+2. 邏輯與篇幅：故事需有明確的起、承、轉、合，不要草率結束。角色要有動機、遇到挑戰、內心產生變化並最終獲得成長。
+3. 教育意義：請將家長提供的關鍵字自然地融入情節中，如果家長有提到教育寓意（如不放棄、誠實、同理心），請在情節轉折與結尾處自然帶出這個正向價值觀，不要用說教的方式，而是讓主角親身體會。
 
-${teachingHint}
-
-如果關鍵字很簡短，請自動延展成具體且新穎的主角、場景與冒險。全文務必使用繁體中文，篇幅約 600 到 800 字，適合孩童睡前閱讀。不要出現任何寫作提示、AI 語句、格式說明或額外附註。`;
+請直接輸出故事內容，不需要給故事標題，不需要額外的問候語或註解。請確保段落分明，讓孩子聽了感到安心且充滿啟發。`;
 
 		const apiKey = process.env.GROQ_API_KEY || "";
 
@@ -70,8 +66,8 @@ ${teachingHint}
 			body: JSON.stringify({
 				model: "llama3-70b-8192",
 				messages: [{ role: "user", content: prompt }],
-				temperature: 0.75,
-				max_tokens: 1024,
+				temperature: 0.7,
+				max_tokens: 1500,
 				top_p: 0.9,
 				stream: false
 			}),
