@@ -9,6 +9,67 @@ const corsHeaders = {
 	"Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3";
+
+async function generateWithGroq(
+	prompt: string,
+	apiKey: string,
+): Promise<string> {
+	const groqResponse = await fetch(
+		"https://api.groq.com/openai/v1/chat/completions",
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${apiKey}`,
+			},
+			body: JSON.stringify({
+				model: GROQ_MODEL,
+				messages: [{ role: "user", content: prompt }],
+				temperature: 0.7,
+				max_tokens: 2048,
+				top_p: 0.9,
+				stream: false,
+			}),
+			signal: AbortSignal.timeout(30000),
+		},
+	);
+
+	if (!groqResponse.ok) {
+		const errorText = await groqResponse.text();
+		console.error("Groq API error:", errorText);
+		throw new Error("無法連接 Groq 模型服務。");
+	}
+
+	const data = await groqResponse.json();
+	return data?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+async function generateWithOllama(prompt: string): Promise<string> {
+	const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			model: OLLAMA_MODEL,
+			prompt,
+			stream: false,
+			options: { temperature: 0.7, top_p: 0.9 },
+		}),
+		signal: AbortSignal.timeout(55000),
+	});
+
+	if (!ollamaResponse.ok) {
+		const errorText = await ollamaResponse.text();
+		console.error("Ollama API error:", errorText);
+		throw new Error("無法連接本地 Ollama 服務。");
+	}
+
+	const data = await ollamaResponse.json();
+	return data?.response?.trim() || "";
+}
+
 export async function POST(request: Request) {
 	const ip =
 		request.headers.get("x-forwarded-for") ||
@@ -32,7 +93,7 @@ export async function POST(request: Request) {
 			"常常半途而廢的小松鼠 堅持到底 收集過冬果實",
 			"喜歡分享的小蜜蜂 團隊合作與分享 彩虹花園",
 			"說了謊的小木偶 誠實的力量 歡樂馬戲團",
-			"迷路的星星 同理心與互相幫助 夜空尋家"
+			"迷路的星星 同理心與互相幫助 夜空尋家",
 		];
 
 		const effectiveKeyword =
@@ -41,9 +102,12 @@ export async function POST(request: Request) {
 				: keyword.trim();
 
 		if (!effectiveKeyword) {
-			return NextResponse.json({ error: "Keyword is required" }, { status: 400, headers: corsHeaders });
+			return NextResponse.json(
+				{ error: "Keyword is required" },
+				{ status: 400, headers: corsHeaders },
+			);
 		}
-			
+
 		const prompt = `你是一位專業的兒童睡前故事作家，專門為小朋友撰寫像 Google Gemini Storybook 那樣高品質、有教育意義且邏輯嚴謹的故事。
 現在有一位家長提供了以下關鍵字或主題：
 「${effectiveKeyword}」
@@ -55,33 +119,38 @@ export async function POST(request: Request) {
 
 請直接輸出故事內容，不需要給故事標題，不需要額外的問候語或註解。請確保段落分明，讓孩子聽了感到安心且充滿啟發。`;
 
+		// 後端策略：有 GROQ_API_KEY 先走 Groq 雲端；失敗或未設定則退回本地/區網 Ollama。
 		const apiKey = process.env.GROQ_API_KEY || "";
+		let storyText = "";
+		const failures: string[] = [];
 
-		const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify({
-				model: "llama3-70b-8192",
-				messages: [{ role: "user", content: prompt }],
-				temperature: 0.7,
-				max_tokens: 1500,
-				top_p: 0.9,
-				stream: false
-			}),
-			signal: AbortSignal.timeout(30000),
-		});
-
-		if (!groqResponse.ok) {
-			const errorText = await groqResponse.text();
-			console.error("Groq API error:", errorText);
-			throw new Error("無法連接 Groq 模型服務。");
+		if (apiKey) {
+			try {
+				storyText = await generateWithGroq(prompt, apiKey);
+			} catch (error) {
+				console.warn("Groq failed, falling back to Ollama:", error);
+				failures.push("Groq");
+			}
 		}
 
-		const data = await groqResponse.json();
-		const storyText = data?.choices?.[0]?.message?.content?.trim() || "";
+		if (!storyText) {
+			try {
+				storyText = await generateWithOllama(prompt);
+			} catch (error) {
+				console.error("Ollama failed:", error);
+				failures.push(`Ollama (${OLLAMA_BASE_URL})`);
+			}
+		}
+
+		if (!storyText) {
+			const hint = apiKey
+				? `已嘗試：${failures.join("、")}，皆無法產生故事。`
+				: `未設定 GROQ_API_KEY，且本地 Ollama（${OLLAMA_BASE_URL}）無法連線。請在 .env.local 設定 GROQ_API_KEY，或啟動 Ollama 服務。`;
+			return NextResponse.json(
+				{ error: `故事生成服務目前無法使用。${hint}` },
+				{ status: 503, headers: corsHeaders },
+			);
+		}
 
 		return NextResponse.json({ story: storyText }, { headers: corsHeaders });
 	} catch (error) {

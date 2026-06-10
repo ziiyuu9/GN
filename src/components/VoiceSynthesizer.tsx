@@ -36,14 +36,24 @@ export function VoiceSynthesizer() {
 			if (audioUrl) {
 				URL.revokeObjectURL(audioUrl);
 			}
+		};
+	}, [audioUrl]);
+
+	useEffect(() => {
+		return () => {
 			if (sampleUrl) {
 				URL.revokeObjectURL(sampleUrl);
 			}
+		};
+	}, [sampleUrl]);
+
+	useEffect(() => {
+		return () => {
 			mediaStreamRef.current?.getTracks().forEach((track) => {
 				track.stop();
 			});
 		};
-	}, [audioUrl, sampleUrl]);
+	}, []);
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files && e.target.files.length > 0) {
@@ -152,7 +162,9 @@ export function VoiceSynthesizer() {
 
 			recorder.start(250);
 			setIsRecording(true);
-			setInfo("正在錄音中，請說話... (若播放無聲，請檢查系統或瀏覽器麥克風音量設定)");
+			setInfo(
+				"正在錄音中，請說話... (若播放無聲，請檢查系統或瀏覽器麥克風音量設定)",
+			);
 		} catch (err) {
 			console.error(err);
 			setRecorderError("無法啟動麥克風，請允許麥克風存取。");
