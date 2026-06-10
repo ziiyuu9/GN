@@ -6,6 +6,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as cloneVoicePOST } from "../app/api/clone-voice/route";
 import { VoiceSynthesizer } from "./VoiceSynthesizer";
 
+// 模擬 @gradio/client，避免單元測試打真實的 Hugging Face Space
+vi.mock("@gradio/client", () => ({
+	Client: {
+		connect: vi.fn(async () => ({
+			predict: vi.fn(async () => ({
+				data: [{ url: "https://fake-space.hf.space/file=output.wav" }],
+			})),
+		})),
+	},
+}));
+
 async function render(element: ReactElement) {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
@@ -33,6 +44,7 @@ describe("VoiceSynthesizer", () => {
 		const fakeBase64 =
 			"UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
 		const fakeBytes = new Uint8Array(Buffer.from(fakeBase64, "base64"));
+		// 此 fetch mock 對應 route 內下載 Gradio 產出音檔的那一步
 		const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce({
 			ok: true,
 			arrayBuffer: async () => fakeBytes.buffer,
@@ -54,7 +66,9 @@ describe("VoiceSynthesizer", () => {
 		const response = await cloneVoicePOST(request);
 		const data = await response.json();
 
-		expect(fetchSpy).toHaveBeenCalled();
+		expect(fetchSpy).toHaveBeenCalledWith(
+			"https://fake-space.hf.space/file=output.wav",
+		);
 		expect(data.audioBase64).toBe(fakeBase64);
 	});
 });

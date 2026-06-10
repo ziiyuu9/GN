@@ -18,6 +18,7 @@ async function render(element: ReactElement) {
 describe("StoryGenerator", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
 		document.body.innerHTML = "";
 	});
 
@@ -28,7 +29,9 @@ describe("StoryGenerator", () => {
 		expect(button?.hasAttribute("disabled")).toBe(true);
 	});
 
-	it("generates a story through the API route handler", async () => {
+	it("generates a story through the API route handler (Ollama fallback path)", async () => {
+		// 未設定 GROQ_API_KEY 時，route 會走本地 Ollama 路徑（回傳格式為 { response }）
+		vi.stubEnv("GROQ_API_KEY", "");
 		const storyText = "這是一個測試故事。";
 		const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce({
 			ok: true,
