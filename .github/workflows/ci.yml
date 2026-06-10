@@ -20,27 +20,19 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          cd source
-          npm ci
+        run: npm ci
 
       - name: Run lint
-        run: |
-          cd source
-          npm run lint
+        run: npm run lint
 
       - name: Run unit tests
-        run: |
-          cd source
-          npm test
+        run: npm test
 
       - name: Build Next.js app
-        run: |
-          cd source
-          npm run build
+        run: npm run build
 
-      - name: Run Playwright tests (optional)
-        if: ${{ always() }}
-        run: |
-          cd source
-          npx playwright test --config=playwright.config.ts --reporter=dot || true
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=dot
