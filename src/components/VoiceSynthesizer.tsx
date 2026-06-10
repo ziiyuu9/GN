@@ -36,14 +36,24 @@ export function VoiceSynthesizer() {
 			if (audioUrl) {
 				URL.revokeObjectURL(audioUrl);
 			}
+		};
+	}, [audioUrl]);
+
+	useEffect(() => {
+		return () => {
 			if (sampleUrl) {
 				URL.revokeObjectURL(sampleUrl);
 			}
+		};
+	}, [sampleUrl]);
+
+	useEffect(() => {
+		return () => {
 			mediaStreamRef.current?.getTracks().forEach((track) => {
 				track.stop();
 			});
 		};
-	}, [audioUrl, sampleUrl]);
+	}, []);
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files && e.target.files.length > 0) {
