@@ -26,30 +26,38 @@ export async function POST(request: Request) {
 		const formData = await request.formData();
 		const audioBlob = formData.get("audio") as Blob | null;
 		const storyText = formData.get("story") as string | null;
+		const promptText = formData.get("promptText") as string | null;
 
-		if (!audioBlob || !storyText) {
+		if (!audioBlob || !storyText || !promptText) {
 			return NextResponse.json(
-				{ error: "Audio file and story text are required" },
+				{ error: "Audio file, story text, and prompt text are required" },
 				{ status: 400, headers: corsHeaders },
 			);
 		}
 
-		console.log("Connecting to Hugging Face Gradio Space (tonyassi/voice-clone)...");
+		console.log("Connecting to Hugging Face Gradio Space (Splend1dchan/BreezyVoice-Playground)...");
 		
 		try {
-			// 初始化 Gradio Client
-			const app = await client("tonyassi/voice-clone");
+			// 初始化 Gradio Client，改接聯發科的 BreezyVoice
+			const app = await client("Splend1dchan/BreezyVoice-Playground");
 			
-			// 呼叫語音複製預測介面
-			// 根據 API 文件，輸入為: [text, audio Blob]
-			const result = await app.predict("/clone", [
-				storyText,
-				audioBlob,
+			// 呼叫 /generate_audio API
+			// 參數順序: [目標文本, 樣本文本, 上傳音檔, 錄製音檔, 種子碼, 來源選擇]
+			const result = await app.predict("/generate_audio", [
+				storyText,          // 目標故事文字
+				promptText,         // 音檔的逐字稿 (BreezyVoice的特點)
+				audioBlob,          // 當作上傳音檔傳入 (Blob格式相容)
+				null,               // 錄製音檔留空 (前端都統一當作File/Blob送過來)
+				Math.floor(Math.random() * 10000), // 給個隨機種子
+				"上傳檔案"          // 對應 Radio 的選項
 			]);
 
 			// Gradio 回傳的 result.data 是一個陣列，包含音檔物件
 			const outputData = result.data as any[];
-			const audioUrl = outputData[0]?.url;
+			const audioObj = outputData[0];
+			
+			// Gradio 舊版回傳 url，新版回傳 { url }
+			const audioUrl = typeof audioObj === "string" ? audioObj : audioObj?.url;
 
 			if (!audioUrl) {
 				throw new Error("Gradio response did not contain audio URL.");
@@ -67,13 +75,13 @@ export async function POST(request: Request) {
 				{ audioBase64: audioBase64Out },
 				{ headers: corsHeaders }
 			);
-		} catch (error) {
+		} catch (error: any) {
 			console.warn("⚠️ Hugging Face 雲端語音服務無法連線或逾時。", error);
 			await new Promise((resolve) => setTimeout(resolve, 1200));
 			return NextResponse.json(
 				{
 					audioBase64: null,
-					message: "雲端語音生成逾時或排隊人數過多，請稍後重試。 (Hugging Face Spaces Queue Full)",
+					message: `BreezyVoice 生成逾時或出錯: ${error?.message || "請稍後重試。"}`,
 				},
 				{ headers: corsHeaders }
 			);

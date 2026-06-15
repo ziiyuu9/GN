@@ -24,7 +24,7 @@ async function generateWithOllama(prompt: string): Promise<string> {
 			stream: false,
 			options: { temperature: 0.7, top_p: 0.9 },
 		}),
-		signal: AbortSignal.timeout(55000),
+		signal: AbortSignal.timeout(300000),
 	});
 
 	if (!ollamaResponse.ok) {

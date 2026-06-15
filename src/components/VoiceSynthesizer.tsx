@@ -15,6 +15,7 @@ function decodeBase64ToBlob(base64: string, mimeType = "audio/wav") {
 
 export function VoiceSynthesizer() {
 	const [text, setText] = useState("");
+	const [promptText, setPromptText] = useState("");
 	const [file, setFile] = useState<File | null>(null);
 	const [sampleUrl, setSampleUrl] = useState<string | null>(null);
 	const [isRecording, setIsRecording] = useState(false);
@@ -67,7 +68,7 @@ export function VoiceSynthesizer() {
 
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!text.trim() || !file) return;
+		if (!text.trim() || !promptText.trim() || !file) return;
 
 		setIsGenerating(true);
 		setError("");
@@ -82,6 +83,7 @@ export function VoiceSynthesizer() {
 			const formData = new FormData();
 			formData.append("audio", file);
 			formData.append("story", text);
+			formData.append("promptText", promptText);
 
 			const res = await fetch("/api/clone-voice", {
 				method: "POST",
@@ -227,7 +229,16 @@ export function VoiceSynthesizer() {
 				</button>
 
 				<textarea
-					placeholder="請輸入想要合成的語音文本，建議 1-2 句完整中文句子。"
+					placeholder="音訊樣本文本：請輸入您剛才錄音或上傳音檔中，逐字逐句說出的內容。這能幫助模型精準對齊您的聲音特徵。"
+					value={promptText}
+					onChange={(e) => setPromptText(e.target.value)}
+					disabled={isGenerating}
+					rows={2}
+					style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
+				/>
+
+				<textarea
+					placeholder="請輸入想要合成的故事文本，建議 1-2 句完整中文句子。"
 					value={text}
 					onChange={(e) => setText(e.target.value)}
 					disabled={isGenerating}
@@ -238,7 +249,7 @@ export function VoiceSynthesizer() {
 				<MagicButton
 					type="submit"
 					variant="secondary"
-					disabled={isGenerating || !text.trim() || !file}
+					disabled={isGenerating || !text.trim() || !promptText.trim() || !file}
 					aria-busy={isGenerating}
 				>
 					{isGenerating ? "語音合成中..." : "生成克隆語音"}
