@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { globalRateLimiter } from "@/lib/rate-limiter";
-import { client } from "@gradio/client";
+import { client, handle_file } from "@gradio/client";
+import { tmpdir } from "os";
+import { join } from "path";
+import { writeFileSync, unlinkSync } from "fs";
 
 export const maxDuration = 60; // 允許較長的 Vercel 執行時間
 
@@ -35,41 +38,43 @@ export async function POST(request: Request) {
 			);
 		}
 
+		const uploadedFile = formData.get("audio") as File;
+		const arrayBuffer = await uploadedFile.arrayBuffer();
+		
+		// 為了確保 Gradio 能夠正確辨識檔案名稱與格式，我們必須寫入本地暫存檔，並使用 handle_file 進行標準上傳
+		const tempFilePath = join(tmpdir(), `gradio_upload_${Date.now()}_audio.wav`);
+		writeFileSync(tempFilePath, Buffer.from(arrayBuffer));
+
 		console.log("Connecting to Hugging Face Gradio Space (Splend1dchan/BreezyVoice-Playground)...");
 		
 		try {
-			// 初始化 Gradio Client，改接聯發科的 BreezyVoice
 			const app = await client("Splend1dchan/BreezyVoice-Playground");
 			
-			// 呼叫 /generate_audio API
-			// 參數順序: [目標文本, 樣本文本, 上傳音檔, 錄製音檔, 種子碼, 來源選擇]
+			// 避免字數過長導致 HF Space 當機或排隊超過 30 分鐘
+			const truncatedText = storyText.length > 150 ? storyText.substring(0, 150) : storyText;
+
 			const result = await app.predict("/generate_audio", [
-				storyText,          // 目標故事文字
-				promptText,         // 音檔的逐字稿 (BreezyVoice的特點)
-				audioBlob,          // 當作上傳音檔傳入 (Blob格式相容)
-				null,               // 錄製音檔留空 (前端都統一當作File/Blob送過來)
-				Math.floor(Math.random() * 10000), // 給個隨機種子
-				"上傳檔案"          // 對應 Radio 的選項
+				truncatedText,      // 目標故事文字
+				promptText,         // 音檔的逐字稿
+				handle_file(tempFilePath), // 正確使用 handle_file 上傳，產生完整的 Gradio FileData
+				null,               
+				Math.floor(Math.random() * 10000),
+				"上傳檔案"
 			]);
 
-			// Gradio 回傳的 result.data 是一個陣列，包含音檔物件
 			const outputData = result.data as any[];
 			const audioObj = outputData[0];
-			
-			// Gradio 舊版回傳 url，新版回傳 { url }
 			const audioUrl = typeof audioObj === "string" ? audioObj : audioObj?.url;
 
-			if (!audioUrl) {
-				throw new Error("Gradio response did not contain audio URL.");
-			}
+			if (!audioUrl) throw new Error("Gradio response missing URL");
 
-			// 取得產生的音檔內容
 			const audioResponse = await fetch(audioUrl);
-			if (!audioResponse.ok) {
-				throw new Error("Failed to fetch generated audio from Hugging Face.");
-			}
+			if (!audioResponse.ok) throw new Error("Failed to fetch audio");
+			
 			const audioBufferOut = await audioResponse.arrayBuffer();
 			const audioBase64Out = Buffer.from(audioBufferOut).toString("base64");
+
+			try { unlinkSync(tempFilePath); } catch (e) {}
 
 			return NextResponse.json(
 				{ audioBase64: audioBase64Out },
@@ -77,6 +82,7 @@ export async function POST(request: Request) {
 			);
 		} catch (error: any) {
 			console.warn("⚠️ Hugging Face 雲端語音服務無法連線或逾時。", error);
+			try { unlinkSync(tempFilePath); } catch (e) {} // 失敗也要清除暫存檔
 			await new Promise((resolve) => setTimeout(resolve, 1200));
 			return NextResponse.json(
 				{

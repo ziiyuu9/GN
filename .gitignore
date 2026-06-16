@@ -44,3 +44,7 @@ next-env.d.ts
 tts_server/venv/
 playwright-report/
 test-results/
+source/
+source/
+source/node_modules/
+source/node_modules

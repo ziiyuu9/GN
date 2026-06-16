@@ -20,9 +20,10 @@ async function generateWithOllama(prompt: string): Promise<string> {
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
 			model: OLLAMA_MODEL,
+			system: "你是一位專門為台灣兒童寫睡前故事的作家。你的最高指導原則是：「絕對且嚴格地」全程只使用繁體中文。絕對不可夾雜任何英文字母、英文單字或外文。你的所有回答必須 100% 是繁體中文。",
 			prompt,
 			stream: false,
-			options: { temperature: 0.7, top_p: 0.9 },
+			options: { temperature: 0.6, top_p: 0.9 },
 		}),
 		signal: AbortSignal.timeout(300000),
 	});
@@ -76,10 +77,11 @@ export async function POST(request: Request) {
 現在有一位家長提供了以下關鍵字或主題：
 「${effectiveKeyword}」
 
-請根據上述家長給的提示，創作一個約 800-1000 字的繁體中文睡前故事。故事必須具備以下特點：
+請根據上述家長給的提示，創作一個約 300-400 字的短篇繁體中文睡前故事。故事必須具備以下特點：
 1. 適合兒童：用語溫暖、生動、具象化，無任何暴力、恐怖或不適合兒童的情節。
 2. 邏輯與篇幅：故事需有明確的起、承、轉、合，不要草率結束。角色要有動機、遇到挑戰、內心產生變化並最終獲得成長。
 3. 教育意義：請將家長提供的關鍵字自然地融入情節中，如果家長有提到教育寓意（如不放棄、誠實、同理心），請在情節轉折與結尾處自然帶出這個正向價值觀，不要用說教的方式，而是讓主角親身體會。
+4. 純中文限制：這是給台灣小朋友看的故事，請「絕對且嚴格地」全程只使用繁體中文，絕對不可夾雜任何英文或其他語言（不要出現任何英文字母、英文單字或句子）。
 
 請直接輸出故事內容，不需要給故事標題，不需要額外的問候語或註解。請確保段落分明，讓孩子聽了感到安心且充滿啟發。`;
 
@@ -87,6 +89,8 @@ export async function POST(request: Request) {
 		let storyText = "";
 		try {
 			storyText = await generateWithOllama(prompt);
+			// 【終極殺手鐧】強制濾除所有英文字母，防止小模型的「語言混亂幻覺」
+			storyText = storyText.replace(/[a-zA-Z]/g, '');
 		} catch (error) {
 			console.error("Ollama failed:", error);
 			return NextResponse.json(

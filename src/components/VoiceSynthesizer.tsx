@@ -13,6 +13,46 @@ function decodeBase64ToBlob(base64: string, mimeType = "audio/wav") {
 	return new Blob([bytes], { type: mimeType });
 }
 
+async function convertToWav(blob: Blob): Promise<File> {
+	// 強制設定為 16000 Hz 採樣率，以符合大多數 AI 語音模型的底層要求
+	const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+	const arrayBuffer = await blob.arrayBuffer();
+	const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+	
+	// 強制轉為單聲道 Mono (避免雙聲道資料傳到後端時發生交錯錯亂)
+	const numOfChannels = 1; 
+	const length = audioBuffer.length * numOfChannels * 2 + 44;
+	const buffer = new ArrayBuffer(length);
+	const view = new DataView(buffer);
+	const channelData = audioBuffer.getChannelData(0); // 只取第一個聲道
+	let pos = 0;
+	
+	function setUint16(data: number) { view.setUint16(pos, data, true); pos += 2; }
+	function setUint32(data: number) { view.setUint32(pos, data, true); pos += 4; }
+	
+	setUint32(0x46464952); // "RIFF"
+	setUint32(length - 8);
+	setUint32(0x45564157); // "WAVE"
+	setUint32(0x20746d66); // "fmt "
+	setUint32(16);
+	setUint16(1); // PCM
+	setUint16(numOfChannels); // 1
+	setUint32(16000); // Sample rate
+	setUint32(16000 * 2 * numOfChannels); // Byte rate
+	setUint16(numOfChannels * 2); // Block align
+	setUint16(16); // 16-bit
+	setUint32(0x61746164); // "data"
+	setUint32(length - pos - 4);
+	
+	for (let i = 0; i < audioBuffer.length; i++) {
+		let sample = Math.max(-1, Math.min(1, channelData[i]));
+		sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+		view.setInt16(pos, sample, true);
+		pos += 2;
+	}
+	return new File([buffer], "audio.wav", { type: "audio/wav" });
+}
+
 export function VoiceSynthesizer() {
 	const [text, setText] = useState("");
 	const [promptText, setPromptText] = useState("");
@@ -56,15 +96,30 @@ export function VoiceSynthesizer() {
 		};
 	}, []);
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files && e.target.files.length > 0) {
-			setFile(e.target.files[0]);
+			const selectedFile = e.target.files[0];
+			setInfo("正在轉換音檔格式中，請稍候...");
 			if (sampleUrl) {
 				URL.revokeObjectURL(sampleUrl);
 				setSampleUrl(null);
 			}
+			try {
+				const wavFile = await convertToWav(selectedFile);
+				setFile(wavFile);
+				setSampleUrl(URL.createObjectURL(wavFile));
+				setInfo("音檔格式已完美轉換為模型支援的 WAV！請點擊下方播放鈕確認是否有聲音。");
+			} catch (err) {
+				console.error(err);
+				alert("無法處理此音檔，請嘗試上傳其他的音檔。");
+			}
 		}
 	};
+
+	const [audioUrls, setAudioUrls] = useState<string[]>([]);
+	const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
+	const [generationProgress, setGenerationProgress] = useState("");
+	const audioRef = useRef<HTMLAudioElement>(null);
 
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -73,39 +128,66 @@ export function VoiceSynthesizer() {
 		setIsGenerating(true);
 		setError("");
 		setInfo("");
+		setGenerationProgress("");
+		
+		// 清除舊的音檔
+		audioUrls.forEach(url => URL.revokeObjectURL(url));
+		setAudioUrls([]);
+		setCurrentPlayIndex(0);
 
-		if (audioUrl) {
-			URL.revokeObjectURL(audioUrl);
-			setAudioUrl(null);
+		// 將完整故事依照標點符號與換行切割
+		const rawSentences = text.split(/(?<=[。！？.!?])\s*|\n+/).filter(s => s.trim().length > 0);
+		
+		// 將句子組合成不超過 100 字的區塊
+		const chunks: string[] = [];
+		let currentChunk = "";
+		for (const sentence of rawSentences) {
+			if (currentChunk.length + sentence.length > 100) {
+				if (currentChunk) chunks.push(currentChunk);
+				currentChunk = sentence;
+			} else {
+				currentChunk += sentence;
+			}
 		}
+		if (currentChunk) chunks.push(currentChunk);
+
+		const newAudioUrls: string[] = [];
 
 		try {
-			const formData = new FormData();
-			formData.append("audio", file);
-			formData.append("story", text);
-			formData.append("promptText", promptText);
+			for (let i = 0; i < chunks.length; i++) {
+				setGenerationProgress(`正在為您合成故事段落 ${i + 1} / ${chunks.length} ... (雲端排隊中請稍候)`);
+				
+				const formData = new FormData();
+				formData.append("audio", file); // 這裡的 file 已經被強制轉換成乾淨的 WAV 了
+				formData.append("story", chunks[i]);
+				formData.append("promptText", promptText);
 
-			const res = await fetch("/api/clone-voice", {
-				method: "POST",
-				body: formData,
-			});
+				const res = await fetch("/api/clone-voice", {
+					method: "POST",
+					body: formData,
+				});
 
-			const data = await res.json();
-			if (!res.ok) {
-				throw new Error(data.error || "語音合成失敗，請稍後再試。");
+				const data = await res.json();
+				if (!res.ok) {
+					throw new Error(data.error || `第 ${i + 1} 段語音合成失敗`);
+				}
+
+				if (data.audioBase64) {
+					const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
+					const url = URL.createObjectURL(blob);
+					newAudioUrls.push(url);
+					// 即時更新畫面，讓第一段一出來就能開始聽！
+					setAudioUrls([...newAudioUrls]);
+				} else {
+					throw new Error(data.message || "語音合成回傳異常");
+				}
 			}
-
-			if (data.audioBase64) {
-				const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
-				const url = URL.createObjectURL(blob);
-				setAudioUrl(url);
-				setInfo("克隆語音已準備完成，請按下播放按鈕收聽。");
-			} else {
-				setInfo(data.message || "本地語音服務未啟動，已進入模擬模式。");
-			}
+			setInfo("🎉 完整故事已經全部分段合成完畢！您可以開始聆聽了。");
+			setGenerationProgress("");
 		} catch (err: any) {
 			console.error(err);
 			setError(err?.message || "無法連線到語音服務，請稍後再試。");
+			setGenerationProgress("部分生成已中斷，您可以先聆聽已完成的部分。");
 		} finally {
 			setIsGenerating(false);
 		}
@@ -131,25 +213,38 @@ export function VoiceSynthesizer() {
 				}
 			};
 
-			recorder.onstop = () => {
+			recorder.onstop = async () => {
+				setInfo("錄音已完成，正在轉換格式，請稍候...");
 				const blob = new Blob(chunks, {
 					type: chunks[0]?.type || "audio/webm",
 				});
-				const recordedFile = new File([blob], "recording.webm", {
-					type: blob.type,
-				});
-				setFile(recordedFile);
+				
 				if (sampleUrl) {
 					URL.revokeObjectURL(sampleUrl);
 				}
-				setSampleUrl(URL.createObjectURL(blob));
+
+				try {
+					const wavFile = await convertToWav(blob);
+					setFile(wavFile);
+					setSampleUrl(URL.createObjectURL(wavFile));
+					setInfo("錄音格式轉換已完成！請點擊下方播放鈕確認您的錄音是否有聲音。");
+				} catch (err) {
+					console.error("WAV conversion failed:", err);
+					// Fallback if conversion fails
+					const recordedFile = new File([blob], "recording.webm", {
+						type: blob.type,
+					});
+					setFile(recordedFile);
+					setSampleUrl(URL.createObjectURL(blob));
+					setInfo("錄音完成（備用模式）。請確認是否有聲音。");
+				}
+
 				stream.getTracks().forEach((track) => {
 					track.stop();
 				});
 				mediaStreamRef.current = null;
 				mediaRecorderRef.current = null;
 				setIsRecording(false);
-				setInfo("錄音已完成，您可以進行聲音克隆。");
 			};
 
 			recorder.onerror = () => {
@@ -330,18 +425,59 @@ export function VoiceSynthesizer() {
 				</motion.div>
 			)}
 
-			{audioUrl && (
+			{generationProgress && (
+				<motion.div
+					initial={{ opacity: 0, y: -10 }}
+					animate={{ opacity: 1, y: 0 }}
+					style={{ color: "#fde047", fontSize: "0.95rem", marginTop: "0.5rem" }}
+					role="status"
+					aria-live="polite"
+				>
+					{generationProgress}
+				</motion.div>
+			)}
+
+			{audioUrls.length > 0 && (
 				<motion.div
 					initial={{ opacity: 0, scale: 0.95 }}
 					animate={{ opacity: 1, scale: 1 }}
 					transition={{ duration: 0.5 }}
-					style={{ marginTop: "1rem" }}
+					style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}
 				>
+					<p style={{ color: "#e2e8f0", margin: 0, fontSize: "0.9rem" }}>
+						🎵 播放進度：第 {currentPlayIndex + 1} / {audioUrls.length} 段
+					</p>
 					<audio
+						ref={audioRef}
 						controls
-						src={audioUrl}
+						autoPlay
+						src={audioUrls[currentPlayIndex]}
+						onEnded={() => {
+							if (currentPlayIndex < audioUrls.length - 1) {
+								setCurrentPlayIndex(prev => prev + 1);
+							}
+						}}
 						style={{ width: "100%", outline: "none" }}
 					/>
+					<div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+						{audioUrls.map((_, idx) => (
+							<button
+								key={idx}
+								onClick={() => setCurrentPlayIndex(idx)}
+								style={{
+									padding: "0.2rem 0.6rem",
+									borderRadius: "1rem",
+									border: "none",
+									fontSize: "0.8rem",
+									cursor: "pointer",
+									background: currentPlayIndex === idx ? "#a78bfa" : "#334155",
+									color: currentPlayIndex === idx ? "#ffffff" : "#cbd5e1"
+								}}
+							>
+								{idx + 1}
+							</button>
+						))}
+					</div>
 				</motion.div>
 			)}
 		</div>
