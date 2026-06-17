@@ -156,34 +156,60 @@ export function VoiceSynthesizer() {
 
 		try {
 			for (let i = 0; i < chunks.length; i++) {
-				setGenerationProgress(`正在為您合成故事段落 ${i + 1} / ${chunks.length} ... (雲端排隊中請稍候)`);
-				
-				const formData = new FormData();
-				formData.append("audio", file); // 這裡的 file 已經被強制轉換成乾淨的 WAV 了
-				formData.append("story", chunks[i]);
-				formData.append("promptText", promptText);
-				if (hfToken.trim()) {
-					formData.append("hfToken", hfToken.trim());
-				}
+				let success = false;
+				let retryCount = 0;
+				const maxRetries = 2;
 
-				const res = await fetch("/api/clone-voice", {
-					method: "POST",
-					body: formData,
-				});
+				while (!success && retryCount <= maxRetries) {
+					try {
+						// 若為第二次以上的請求或重試，加上冷卻時間避免觸發免費限額
+						if (i > 0 || retryCount > 0) {
+							const waitTime = retryCount > 0 ? 30 : 10;
+							setGenerationProgress(
+								retryCount > 0 
+									? `遇到伺服器限制，等待 ${waitTime} 秒後自動重試段落 ${i + 1}...` 
+									: `為避免伺服器限額，冷卻 ${waitTime} 秒後繼續生成段落 ${i + 1}...`
+							);
+							await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+						}
 
-				const data = await res.json();
-				if (!res.ok) {
-					throw new Error(data.error || `第 ${i + 1} 段語音合成失敗`);
-				}
+						setGenerationProgress(`正在為您合成故事段落 ${i + 1} / ${chunks.length} ... (雲端排隊中請稍候)`);
+						
+						const formData = new FormData();
+						formData.append("audio", file); // 這裡的 file 已經被強制轉換成乾淨的 WAV 了
+						formData.append("story", chunks[i]);
+						formData.append("promptText", promptText);
+						if (hfToken.trim()) {
+							formData.append("hfToken", hfToken.trim());
+						}
 
-				if (data.audioBase64) {
-					const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
-					const url = URL.createObjectURL(blob);
-					newAudioUrls.push(url);
-					// 即時更新畫面，讓第一段一出來就能開始聽！
-					setAudioUrls([...newAudioUrls]);
-				} else {
-					throw new Error(data.message || "語音合成回傳異常");
+						const res = await fetch("/api/clone-voice", {
+							method: "POST",
+							body: formData,
+						});
+
+						const data = await res.json();
+						if (!res.ok) {
+							throw new Error(data.error || data.message || `第 ${i + 1} 段語音合成失敗`);
+						}
+
+						if (data.audioBase64) {
+							const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
+							const url = URL.createObjectURL(blob);
+							newAudioUrls.push(url);
+							// 即時更新畫面，讓第一段一出來就能開始聽！
+							setAudioUrls([...newAudioUrls]);
+							success = true;
+						} else {
+							throw new Error(data.message || "語音合成回傳異常");
+						}
+					} catch (chunkErr: any) {
+						console.warn(`Chunk ${i + 1} failed:`, chunkErr);
+						retryCount++;
+						if (retryCount > maxRetries) {
+							throw chunkErr; // 超過重試次數，直接拋出錯誤給外層
+						}
+					}
 				}
 			}
 			setInfo("🎉 完整故事已經全部分段合成完畢！您可以開始聆聽了。");
