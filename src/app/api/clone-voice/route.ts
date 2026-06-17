@@ -30,6 +30,7 @@ export async function POST(request: Request) {
 		const audioBlob = formData.get("audio") as Blob | null;
 		const storyText = formData.get("story") as string | null;
 		const promptText = formData.get("promptText") as string | null;
+		const hfToken = formData.get("hfToken") as string | null;
 
 		if (!audioBlob || !storyText || !promptText) {
 			return NextResponse.json(
@@ -48,10 +49,10 @@ export async function POST(request: Request) {
 		console.log("Connecting to Hugging Face Gradio Space (mrfakename/E2-F5-TTS)...");
 		
 		try {
-			const app = await client("mrfakename/E2-F5-TTS");
+			const app = await client("mrfakename/E2-F5-TTS", hfToken ? { hf_token: hfToken as any } : undefined);
 			
-			// F5-TTS 支援較長的生成，但我們依然保留 150 字的截斷保護
-			const truncatedText = storyText.length > 150 ? storyText.substring(0, 150) : storyText;
+			// F5-TTS 支援長文本生成，我們將保護限制放寬到 300 字
+			const truncatedText = storyText.length > 300 ? storyText.substring(0, 300) : storyText;
 
 			const result = await app.predict("predict", [
 				handle_file(tempFilePath), // ref_audio

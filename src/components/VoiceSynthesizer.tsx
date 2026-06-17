@@ -56,6 +56,7 @@ async function convertToWav(blob: Blob): Promise<File> {
 export function VoiceSynthesizer() {
 	const [text, setText] = useState("");
 	const [promptText, setPromptText] = useState("");
+	const [hfToken, setHfToken] = useState("");
 	const [file, setFile] = useState<File | null>(null);
 	const [sampleUrl, setSampleUrl] = useState<string | null>(null);
 	const [isRecording, setIsRecording] = useState(false);
@@ -138,11 +139,11 @@ export function VoiceSynthesizer() {
 		// 將完整故事依照標點符號與換行切割
 		const rawSentences = text.split(/(?<=[。！？.!?])\s*|\n+/).filter(s => s.trim().length > 0);
 		
-		// 將句子組合成不超過 100 字的區塊
+		// 將句子組合成不超過 250 字的區塊 (F5-TTS 可以處理更長的文本，減少 API 請求次數)
 		const chunks: string[] = [];
 		let currentChunk = "";
 		for (const sentence of rawSentences) {
-			if (currentChunk.length + sentence.length > 100) {
+			if (currentChunk.length + sentence.length > 250) {
 				if (currentChunk) chunks.push(currentChunk);
 				currentChunk = sentence;
 			} else {
@@ -161,6 +162,9 @@ export function VoiceSynthesizer() {
 				formData.append("audio", file); // 這裡的 file 已經被強制轉換成乾淨的 WAV 了
 				formData.append("story", chunks[i]);
 				formData.append("promptText", promptText);
+				if (hfToken.trim()) {
+					formData.append("hfToken", hfToken.trim());
+				}
 
 				const res = await fetch("/api/clone-voice", {
 					method: "POST",
@@ -351,6 +355,24 @@ export function VoiceSynthesizer() {
 					disabled={isGenerating}
 					rows={4}
 					style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
+				/>
+
+				<input
+					type="password"
+					placeholder="Hugging Face Token (選填，用於解除免費限額，如遇到 ZeroGPU 錯誤請申請一組填入)"
+					value={hfToken}
+					onChange={(e) => setHfToken(e.target.value)}
+					disabled={isGenerating}
+					style={{
+						width: "100%",
+						boxSizing: "border-box",
+						padding: "0.8rem",
+						borderRadius: "var(--radius-sm)",
+						border: "1px solid rgba(255,255,255,0.1)",
+						background: "rgba(15, 23, 42, 0.4)",
+						color: "#fff",
+						fontSize: "0.9rem"
+					}}
 				/>
 
 				<MagicButton
