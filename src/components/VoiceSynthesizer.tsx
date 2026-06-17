@@ -284,6 +284,18 @@ export function VoiceSynthesizer() {
 				marginTop: "1rem",
 			}}
 		>
+			<div style={{ textAlign: "right", marginBottom: "-0.5rem" }}>
+				<span style={{ 
+					fontSize: "0.75rem", 
+					background: "rgba(167, 139, 250, 0.2)", 
+					color: "#c4b5fd", 
+					padding: "0.2rem 0.6rem", 
+					borderRadius: "1rem",
+					border: "1px solid rgba(167, 139, 250, 0.3)" 
+				}}>
+					⚡ Powered by F5-TTS AI Engine
+				</span>
+			</div>
 			<form
 				onSubmit={handleGenerate}
 				style={{ display: "flex", flexDirection: "column", gap: "1rem" }}

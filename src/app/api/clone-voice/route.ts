@@ -45,26 +45,24 @@ export async function POST(request: Request) {
 		const tempFilePath = join(tmpdir(), `gradio_upload_${Date.now()}_audio.wav`);
 		writeFileSync(tempFilePath, Buffer.from(arrayBuffer));
 
-		console.log("Connecting to Hugging Face Gradio Space (Splend1dchan/BreezyVoice-Playground)...");
+		console.log("Connecting to Hugging Face Gradio Space (mrfakename/E2-F5-TTS)...");
 		
 		try {
-			const app = await client("Splend1dchan/BreezyVoice-Playground");
+			const app = await client("mrfakename/E2-F5-TTS");
 			
-			// 避免字數過長導致 HF Space 當機或排隊超過 30 分鐘
+			// F5-TTS 支援較長的生成，但我們依然保留 150 字的截斷保護
 			const truncatedText = storyText.length > 150 ? storyText.substring(0, 150) : storyText;
 
-			const result = await app.predict("/generate_audio", [
-				truncatedText,      // 目標故事文字
-				promptText,         // 音檔的逐字稿
-				handle_file(tempFilePath), // 正確使用 handle_file 上傳，產生完整的 Gradio FileData
-				null,               
-				Math.floor(Math.random() * 10000),
-				"上傳檔案"
+			const result = await app.predict("predict", [
+				handle_file(tempFilePath), // ref_audio
+				promptText,         // ref_text
+				truncatedText,      // gen_text
+				true,               // remove_silences
 			]);
 
 			const outputData = result.data as any[];
 			const audioObj = outputData[0];
-			const audioUrl = typeof audioObj === "string" ? audioObj : audioObj?.url;
+			const audioUrl = typeof audioObj === "string" ? audioObj : (audioObj?.url || audioObj?.path);
 
 			if (!audioUrl) throw new Error("Gradio response missing URL");
 
@@ -81,13 +79,13 @@ export async function POST(request: Request) {
 				{ headers: corsHeaders }
 			);
 		} catch (error: any) {
-			console.warn("⚠️ Hugging Face 雲端語音服務無法連線或逾時。", error);
+			console.warn("⚠️ Hugging Face F5-TTS 雲端語音服務無法連線或逾時。", error);
 			try { unlinkSync(tempFilePath); } catch (e) {} // 失敗也要清除暫存檔
 			await new Promise((resolve) => setTimeout(resolve, 1200));
 			return NextResponse.json(
 				{
 					audioBase64: null,
-					message: `BreezyVoice 生成逾時或出錯: ${error?.message || "請稍後重試。"}`,
+					message: `F5-TTS 生成逾時或出錯: ${error?.message || "請稍後重試。"}`,
 				},
 				{ headers: corsHeaders }
 			);
