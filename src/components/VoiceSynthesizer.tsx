@@ -117,6 +117,7 @@ export function VoiceSynthesizer() {
 		}
 	};
 
+	const [lastGeneratedText, setLastGeneratedText] = useState("");
 	const [audioUrls, setAudioUrls] = useState<string[]>([]);
 	const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
 	const [generationProgress, setGenerationProgress] = useState("");
@@ -130,11 +131,6 @@ export function VoiceSynthesizer() {
 		setError("");
 		setInfo("");
 		setGenerationProgress("");
-		
-		// 清除舊的音檔
-		audioUrls.forEach(url => URL.revokeObjectURL(url));
-		setAudioUrls([]);
-		setCurrentPlayIndex(0);
 
 		// 將完整故事依照標點符號與換行切割
 		const rawSentences = text.split(/(?<=[。！？.!?])\s*|\n+/).filter(s => s.trim().length > 0);
@@ -152,10 +148,24 @@ export function VoiceSynthesizer() {
 		}
 		if (currentChunk) chunks.push(currentChunk);
 
-		const newAudioUrls: string[] = [];
+		let startIdx = 0;
+		const existingUrls = [...audioUrls];
+
+		// 如果文本沒有改變，且有部分已生成的音檔，則進入「接續生成」模式
+		if (text === lastGeneratedText && audioUrls.length > 0 && audioUrls.length < chunks.length) {
+			startIdx = audioUrls.length;
+			setInfo(`接續生成：將從第 ${startIdx + 1} 段開始，為您省下伺服器配額！`);
+		} else {
+			// 清除舊的音檔並重新開始
+			audioUrls.forEach(url => URL.revokeObjectURL(url));
+			setAudioUrls([]);
+			existingUrls.length = 0;
+			setCurrentPlayIndex(0);
+			setLastGeneratedText(text);
+		}
 
 		try {
-			for (let i = 0; i < chunks.length; i++) {
+			for (let i = startIdx; i < chunks.length; i++) {
 				let success = false;
 				let retryCount = 0;
 				const maxRetries = 2;
@@ -196,9 +206,9 @@ export function VoiceSynthesizer() {
 						if (data.audioBase64) {
 							const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
 							const url = URL.createObjectURL(blob);
-							newAudioUrls.push(url);
+							existingUrls.push(url);
 							// 即時更新畫面，讓第一段一出來就能開始聽！
-							setAudioUrls([...newAudioUrls]);
+							setAudioUrls([...existingUrls]);
 							success = true;
 						} else {
 							throw new Error(data.message || "語音合成回傳異常");
