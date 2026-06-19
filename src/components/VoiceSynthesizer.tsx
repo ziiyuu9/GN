@@ -121,7 +121,71 @@ export function VoiceSynthesizer() {
 	const [audioUrls, setAudioUrls] = useState<string[]>([]);
 	const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
 	const [generationProgress, setGenerationProgress] = useState("");
+	const [esp32Ip, setEsp32Ip] = useState(""); // 新增：ESP32 IP 狀態
+	const [isPaused, setIsPaused] = useState(false);
+	const [isPinkNoiseMode, setIsPinkNoiseMode] = useState(false);
+	const pinkNoiseStartTimeRef = useRef<number>(0);
 	const audioRef = useRef<HTMLAudioElement>(null);
+
+	// ESP32 背景播放輪詢邏輯
+	useEffect(() => {
+		if (!esp32Ip.trim() || audioUrls.length === 0) return;
+
+		let isPolling = false;
+		const checkEsp32 = async () => {
+			if (isPolling) return;
+			isPolling = true;
+			try {
+				const res = await fetch(`http://${esp32Ip.trim()}/status`);
+				const data = await res.json();
+				
+				setIsPaused(data.paused);
+
+				if (!isPinkNoiseMode) {
+					// 故事模式
+					if (!data.playing && !data.paused) {
+						if (currentPlayIndex < audioUrls.length) {
+							// 播放下一段故事
+							await fetch(`http://${esp32Ip.trim()}/play?file=/chunk_${currentPlayIndex + 1}.wav`);
+							setCurrentPlayIndex(prev => prev + 1);
+						} else if (currentPlayIndex === audioUrls.length) {
+							// 故事播完，啟動粉紅噪音模式！
+							setIsPinkNoiseMode(true);
+							pinkNoiseStartTimeRef.current = Date.now();
+							// 音量調低避免驚嚇
+							await fetch(`http://${esp32Ip.trim()}/vol?v=5`);
+							// 開始播放粉紅噪音
+							await fetch(`http://${esp32Ip.trim()}/play?file=/pink_noise.mp3`);
+						}
+					}
+				} else {
+					// 粉紅噪音模式 (30分鐘循環)
+					const elapsed = Date.now() - pinkNoiseStartTimeRef.current;
+					if (elapsed > 30 * 60 * 1000) {
+						// 超過 30 分鐘，關閉喇叭
+						if (data.playing || data.paused) {
+							await fetch(`http://${esp32Ip.trim()}/stop`);
+						}
+					} else {
+						// 30 分鐘內，只要停了就繼續重播達成循環
+						if (!data.playing && !data.paused) {
+							await fetch(`http://${esp32Ip.trim()}/play?file=/pink_noise.mp3`);
+						}
+					}
+				}
+
+			} catch (err) {
+				console.warn("ESP32 輪詢錯誤:", err);
+			} finally {
+				isPolling = false;
+			}
+		};
+
+		const timer = setInterval(checkEsp32, 1500);
+		checkEsp32(); 
+		
+		return () => clearInterval(timer);
+	}, [esp32Ip, audioUrls, currentPlayIndex, isPinkNoiseMode]);
 
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -131,6 +195,28 @@ export function VoiceSynthesizer() {
 		setError("");
 		setInfo("");
 		setGenerationProgress("");
+		setIsPinkNoiseMode(false);
+
+		// 如果有設定 ESP32，在生成故事前先自動上傳粉紅噪音底檔
+		if (esp32Ip.trim()) {
+			try {
+				setGenerationProgress("初始化：準備粉紅噪音檔案...");
+				const pnRes = await fetch("/pink_noise.mp3");
+				if (pnRes.ok) {
+					const pnBlob = await pnRes.blob();
+					const pnForm = new FormData();
+					pnForm.append("audio", pnBlob, "pink_noise.mp3");
+					// 背景上傳，不阻擋後續流程
+					fetch(`http://${esp32Ip.trim()}/upload`, {
+						method: "POST",
+						body: pnForm,
+						mode: "cors"
+					}).catch(() => {});
+				}
+			} catch (e) {
+				console.log("找不到粉紅噪音檔案", e);
+			}
+		}
 
 		// 將完整故事依照標點符號與換行切割
 		const rawSentences = text.split(/(?<=[。！？.!?])\s*|\n+/).filter(s => s.trim().length > 0);
@@ -205,6 +291,23 @@ export function VoiceSynthesizer() {
 
 						if (data.audioBase64) {
 							const blob = decodeBase64ToBlob(data.audioBase64, "audio/wav");
+							
+							// 【新增】如果設定了 ESP32 IP，自動上傳
+							if (esp32Ip.trim()) {
+								try {
+									const esp32FormData = new FormData();
+									esp32FormData.append("audio", blob, `chunk_${i + 1}.wav`);
+									setGenerationProgress(`正在將段落 ${i + 1} 傳送至 ESP32 喇叭...`);
+									await fetch(`http://${esp32Ip.trim()}/upload`, {
+										method: "POST",
+										body: esp32FormData,
+										mode: "cors"
+									});
+								} catch (espErr) {
+									console.error("ESP32 上傳失敗", espErr);
+								}
+							}
+
 							const url = URL.createObjectURL(blob);
 							existingUrls.push(url);
 							// 即時更新畫面，讓第一段一出來就能開始聽！
@@ -395,19 +498,32 @@ export function VoiceSynthesizer() {
 
 				<input
 					type="password"
-					placeholder="Hugging Face Token (選填，用於解除免費限額，如遇到 ZeroGPU 錯誤請申請一組填入)"
+					placeholder="Hugging Face Token (選填，如遇限額請填寫)"
 					value={hfToken}
 					onChange={(e) => setHfToken(e.target.value)}
-					disabled={isGenerating}
 					style={{
 						width: "100%",
-						boxSizing: "border-box",
-						padding: "0.8rem",
-						borderRadius: "var(--radius-sm)",
-						border: "1px solid rgba(255,255,255,0.1)",
-						background: "rgba(15, 23, 42, 0.4)",
+						padding: "1rem",
+						borderRadius: "16px",
+						border: "1px solid rgba(255, 255, 255, 0.2)",
+						background: "rgba(255, 255, 255, 0.05)",
 						color: "#fff",
-						fontSize: "0.9rem"
+						fontSize: "1rem",
+					}}
+				/>
+				<input
+					type="text"
+					placeholder="ESP32 喇叭 IP 位址 (選填，例如 192.168.4.1，填寫後聲音將從實體喇叭發出)"
+					value={esp32Ip}
+					onChange={(e) => setEsp32Ip(e.target.value)}
+					style={{
+						width: "100%",
+						padding: "1rem",
+						borderRadius: "16px",
+						border: "1px solid rgba(255, 255, 255, 0.2)",
+						background: "rgba(255, 255, 255, 0.05)",
+						color: "#fff",
+						fontSize: "1rem",
 					}}
 				/>
 
@@ -514,21 +630,54 @@ export function VoiceSynthesizer() {
 					transition={{ duration: 0.5 }}
 					style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}
 				>
-					<p style={{ color: "#e2e8f0", margin: 0, fontSize: "0.9rem" }}>
-						🎵 播放進度：第 {currentPlayIndex + 1} / {audioUrls.length} 段
-					</p>
-					<audio
-						ref={audioRef}
-						controls
-						autoPlay
-						src={audioUrls[currentPlayIndex]}
-						onEnded={() => {
-							if (currentPlayIndex < audioUrls.length - 1) {
-								setCurrentPlayIndex(prev => prev + 1);
+					<p style={{ color: "#e2e8f0", margin: 0, fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+						<span>
+							{isPinkNoiseMode 
+								? "💤 睡眠模式：粉紅噪音 (30 分鐘自動停止)"
+								: `🎵 播放進度：第 ${currentPlayIndex} / ${audioUrls.length} 段`
 							}
-						}}
-						style={{ width: "100%", outline: "none" }}
-					/>
+						</span>
+						
+						{esp32Ip.trim() && !isGenerating && (
+							<button
+								onClick={async () => {
+									try { await fetch(`http://${esp32Ip.trim()}/pause`); } catch (e) {}
+								}}
+								style={{
+									background: "rgba(255,255,255,0.1)",
+									border: "1px solid rgba(255,255,255,0.2)",
+									color: "#fff",
+									padding: "0.4rem 1rem",
+									borderRadius: "20px",
+									cursor: "pointer",
+									fontSize: "0.9rem"
+								}}
+							>
+								{isPaused ? "▶ 繼續" : "⏸ 暫停"}
+							</button>
+						)}
+					</p>
+					{esp32Ip.trim() ? (
+						<div style={{ textAlign: "center", color: "#64b5f6", fontWeight: "bold", padding: "1rem" }}>
+							{isPinkNoiseMode 
+								? (isPaused ? "⏸ 粉紅噪音已暫停" : "🌊 正在 ESP32 循環播放粉紅噪音...")
+								: (isPaused ? "⏸ 故事已暫停" : "🔊 正在 ESP32 實體喇叭上播放...")
+							}
+						</div>
+					) : (
+						<audio
+							ref={audioRef}
+							controls
+							autoPlay
+							src={audioUrls[currentPlayIndex]}
+							onEnded={() => {
+								if (currentPlayIndex < audioUrls.length - 1) {
+									setCurrentPlayIndex(prev => prev + 1);
+								}
+							}}
+							style={{ width: "100%", outline: "none" }}
+						/>
+					)}
 					<div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
 						{audioUrls.map((_, idx) => (
 							<button
