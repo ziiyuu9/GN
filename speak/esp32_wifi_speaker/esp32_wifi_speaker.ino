@@ -33,7 +33,7 @@
 
 #include <WiFi.h>
 #include <WebServer.h>
-#include <LittleFS.h>
+#include <FFat.h>
 #include <WiFiManager.h>      // tzapu
 #include "Audio.h"            // schreibfaul1 / ESP32-audioI2S
 
@@ -77,7 +77,7 @@ String htmlPage() {
 
   // 檔案清單
   html += "<h2>音檔清單</h2><ul>";
-  File root = LittleFS.open("/");
+  File root = FFat.open("/");
   File f = root.openNextFile();
   bool any = false;
   while (f) {
@@ -127,7 +127,7 @@ void handleUpload() {
   HTTPUpload &up = server.upload();
   if (up.status == UPLOAD_FILE_START) {
     String fn = "/" + up.filename;
-    uploadFile = LittleFS.open(fn, "w");
+    uploadFile = FFat.open(fn, "w");
   } else if (up.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) uploadFile.write(up.buf, up.currentSize);
   } else if (up.status == UPLOAD_FILE_END) {
@@ -138,8 +138,8 @@ void handleUpload() {
 void setup() {
   Serial.begin(115200);
 
-  if (!LittleFS.begin(true)) {
-    Serial.println("LittleFS 掛載失敗");
+  if (!FFat.begin(true)) {
+    Serial.println("FFat 掛載失敗");
   }
 
   // ---- WiFi：開機跳設定頁 ----
@@ -193,8 +193,21 @@ void setup() {
     if (server.hasArg("file")) {
       String f = server.arg("file");
       if (!f.startsWith("/")) f = "/" + f;
+      
+      Serial.println("--- 收到播放要求 ---");
+      Serial.println("檔名: " + f);
+      File testF = FFat.open(f, "r");
+      if (!testF) {
+        Serial.println("錯誤：FFat 找不到這個檔案！");
+      } else {
+        Serial.println("成功：FFat 找到檔案，大小 = " + String(testF.size()) + " bytes");
+        testF.close();
+      }
+
       audio.stopSong();
-      audio.connecttoFS(LittleFS, f.c_str());
+      bool res = audio.connecttoFS(FFat, f.c_str());
+      Serial.println("audio.connecttoFS 回傳值 = " + String(res));
+      
       nowPlaying = f;
     }
     sendCORSHeaders();
@@ -227,7 +240,7 @@ void setup() {
     if (server.hasArg("file")) {
       String f = server.arg("file");
       if (!f.startsWith("/")) f = "/" + f;
-      LittleFS.remove(f);
+      FFat.remove(f);
     }
     sendCORSHeaders();
     server.sendHeader("Location", "/"); server.send(303);
@@ -252,4 +265,13 @@ void loop() {
 // 播放結束時的回呼（清掉「正在播放」狀態）
 void audio_eof_mp3(const char *info) {
   nowPlaying = "";
+  Serial.print("eof_mp3: "); Serial.println(info);
+}
+
+void audio_info(const char *info) {
+  Serial.print("audio_info: "); Serial.println(info);
+}
+
+void audio_id3data(const char *info) {
+  Serial.print("audio_id3: "); Serial.println(info);
 }

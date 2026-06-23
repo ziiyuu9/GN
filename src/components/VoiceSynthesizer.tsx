@@ -682,7 +682,17 @@ export function VoiceSynthesizer() {
 						{audioUrls.map((_, idx) => (
 							<button
 								key={idx}
-								onClick={() => setCurrentPlayIndex(idx)}
+								onClick={async () => {
+									setCurrentPlayIndex(idx);
+									setIsPinkNoiseMode(false); // 切換段落時退出粉紅噪音模式
+									if (esp32Ip.trim() && !isGenerating) {
+										try {
+											await fetch(`http://${esp32Ip.trim()}/play?file=/chunk_${idx + 1}.wav`);
+										} catch (e) {
+											console.error("強制切換段落失敗", e);
+										}
+									}
+								}}
 								style={{
 									padding: "0.2rem 0.6rem",
 									borderRadius: "1rem",
