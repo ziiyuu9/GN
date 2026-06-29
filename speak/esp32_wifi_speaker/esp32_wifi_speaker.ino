@@ -2,7 +2,7 @@
  * ESP32-S3 WiFi 小喇叭
  * --------------------------------------------------------------
  * 手機連上同一個 WiFi → 開瀏覽器進這台的網頁 → 上傳 MP3 → 按播放。
- * 音檔存在板子的 flash（LittleFS），透過 I2S 推給 MAX98357A → 喇叭。
+ * 音檔存在板子的 flash（FFat / FAT 檔案系統），透過 I2S 推給 MAX98357A → 喇叭。
  *
  * 第一次開機（或找不到 WiFi）會自己開一個熱點「ESP32-Speaker」，
  * 手機連上去就會跳出設定頁，選你家 WiFi、輸入密碼即可，不用改程式。
@@ -26,9 +26,10 @@
  *   USB CDC On Boot:  Enabled
  *   Flash Size:       16MB
  *   PSRAM:            OPI PSRAM
- *   Partition Scheme: 選一個有檔案系統空間的，例如
- *                     "16M Flash (3MB APP/9.9MB FATFS)" 或
- *                     "Default 4MB with spiffs" 也行（音檔放得較少）
+ *   Partition Scheme: 一定要選含 FATFS 的方案（本程式用 FFat），例如
+ *                     "16M Flash (3MB APP/9.9MB FATFS)"。
+ *                     ⚠ 不要選 SPIFFS 方案（如 "Default 4MB with spiffs"），
+ *                       FFat 掛載會失敗，上傳/播放都不會動、喇叭沒聲音。
  */
 
 #include <WiFi.h>
@@ -47,6 +48,7 @@ WebServer server(80);
 
 int   currentVolume = 12;     // 0~21
 String nowPlaying = "";
+bool  ffatOK = false;         // FFat 是否掛載成功（失敗時網頁會顯示紅字警告）
 
 // ====== 網頁首頁 ======
 String htmlPage() {
@@ -62,9 +64,23 @@ String htmlPage() {
     "a.del{background:#f55;border-color:#e44;color:#fff}"
     "li{margin:8px 0;list-style:none}ul{padding:0}"
     ".now{background:#eef;padding:10px;border-radius:8px}"
+    ".err{background:#fee;border:1px solid #e44;color:#b00;padding:12px;border-radius:8px;margin:12px 0}"
+    "input,select{padding:8px;border:1px solid #ccc;border-radius:8px;font-size:15px;width:100%;box-sizing:border-box;margin:4px 0}"
     "</style></head><body>";
 
   html += "<h1>🔊 WiFi 小喇叭</h1>";
+
+  // 目前連線資訊：連到哪個 WiFi、IP 多少（不用開 Serial 也看得到）
+  if (WiFi.status() == WL_CONNECTED)
+    html += "<p class='now'>已連線 WiFi：<b>" + WiFi.SSID() + "</b>"
+            "&nbsp;｜&nbsp;IP：<b>" + WiFi.localIP().toString() + "</b></p>";
+
+  // 檔案系統掛載失敗：上傳/播放都不會動，明確警告（否則只印在 Serial，網頁看不出來）
+  if (!ffatOK)
+    html += "<p class='err'>⚠ <b>FFat 檔案系統掛載失敗</b><br>"
+            "上傳與播放都無法運作、喇叭不會有聲音。<br>"
+            "請在 Arduino IDE 的 <b>Tools → Partition Scheme</b> 改選含 <b>FATFS</b> 的方案"
+            "（例如 16M Flash 3MB APP/9.9MB FATFS），重新燒錄即可。</p>";
 
   if (nowPlaying.length())
     html += "<p class='now'>正在播放：<b>" + nowPlaying + "</b> "
@@ -101,10 +117,37 @@ String htmlPage() {
           "<input type='file' name='audio' accept='.mp3,.wav'><br><br>"
           "<button type='submit'>上傳</button></form>";
 
+  // 設定 / 切換 WiFi（直接在網頁輸入，不必再連 ESP32-Speaker 熱點）
+  html += "<h2 style='margin-top:32px'>設定 / 切換 WiFi</h2>"
+          "<form method='POST' action='/setwifi'>"
+          "<select id='ssidsel' onchange=\"document.getElementsByName('ssid')[0].value=this.value\">"
+          "<option>掃描中…</option></select>"
+          "<button type='button' onclick='scanWifi()'>🔄 重新掃描</button>"
+          "<input name='ssid' placeholder='WiFi 名稱 (SSID)，或從上方選' required>"
+          "<input name='pass' type='password' placeholder='WiFi 密碼（沒密碼留空）'>"
+          "<button type='submit'>連線並記住</button></form>"
+          "<p style='color:#888;font-size:13px'>從上方下拉選單挑你家的 WiFi（也可手動輸入隱藏網路）。"
+          "儲存後板子會重開並連上新網路，IP 可能會變；請改連到新的 WiFi 再重整本頁。</p>";
+
   // 重設 WiFi
   html += "<h2 style='margin-top:32px'>其他</h2>"
           "<a class='btn' href='/resetwifi' "
           "onclick=\"return confirm('確定要清除 WiFi 設定並重開機？')\">重設 WiFi</a>";
+
+  // 掃描附近 WiFi，填進上方下拉選單（依訊號強度排序）
+  html += "<script>"
+          "function scanWifi(){"
+          "var s=document.getElementById('ssidsel');"
+          "s.innerHTML='<option>掃描中…</option>';"
+          "fetch('/scan').then(r=>r.json()).then(l=>{"
+          "l.sort((a,b)=>b.rssi-a.rssi);"
+          "s.innerHTML='<option value=\"\">— 選擇 WiFi —</option>';"
+          "l.forEach(w=>{var o=document.createElement('option');o.value=w.ssid;"
+          "o.textContent=(w.lock?'\\uD83D\\uDD12 ':'')+w.ssid+' ('+w.rssi+'dBm)';s.appendChild(o);});"
+          "}).catch(e=>{s.innerHTML='<option value=\"\">掃描失敗，請手動輸入</option>';});"
+          "}"
+          "scanWifi();"
+          "</script>";
 
   html += "</body></html>";
   return html;
@@ -138,9 +181,13 @@ void handleUpload() {
 void setup() {
   Serial.begin(115200);
 
-  if (!FFat.begin(true)) {
-    Serial.println("FFat 掛載失敗");
+  ffatOK = FFat.begin(true);
+  if (!ffatOK) {
+    Serial.println("FFat 掛載失敗：請把 Arduino IDE 的 Partition Scheme 改成含 FATFS 的方案");
   }
+
+  // 診斷：PSRAM 沒啟用的話 Audio 解碼器會配不到緩衝區、播放沒聲音也沒 audio_info
+  Serial.printf("PSRAM 偵測：found=%d, size=%u bytes\n", psramFound(), (unsigned)ESP.getPsramSize());
 
   // ---- WiFi：開機跳設定頁 ----
   WiFiManager wm;
@@ -207,7 +254,9 @@ void setup() {
       audio.stopSong();
       bool res = audio.connecttoFS(FFat, f.c_str());
       Serial.println("audio.connecttoFS 回傳值 = " + String(res));
-      
+      // 診斷：true=解碼器真的在跑（問題在硬體輸出）；false=I2S/解碼沒起來（PSRAM 或函式庫版本問題）
+      Serial.println("audio.isRunning() = " + String(audio.isRunning()));
+
       nowPlaying = f;
     }
     sendCORSHeaders();
@@ -244,6 +293,45 @@ void setup() {
     }
     sendCORSHeaders();
     server.sendHeader("Location", "/"); server.send(303);
+  });
+
+  // 掃描附近 WiFi，回傳 JSON 清單給網頁下拉選單用
+  server.on("/scan", HTTP_GET, []() {
+    sendCORSHeaders();
+    int n = WiFi.scanNetworks();
+    String json = "[";
+    for (int i = 0; i < n; i++) {
+      if (i) json += ",";
+      String s = WiFi.SSID(i);
+      s.replace("\\", "\\\\");   // 跳脫，避免 SSID 含特殊字元破壞 JSON
+      s.replace("\"", "\\\"");
+      json += "{\"ssid\":\"" + s + "\",\"rssi\":" + String(WiFi.RSSI(i)) +
+              ",\"lock\":" + ((WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "false" : "true") + "}";
+    }
+    json += "]";
+    WiFi.scanDelete();
+    server.send(200, "application/json", json);
+  });
+
+  // 從網頁設定 / 切換 WiFi：存帳密 → 重開機 → autoConnect 會連上新網路
+  server.on("/setwifi", HTTP_POST, []() {
+    sendCORSHeaders();
+    String ssid = server.arg("ssid");
+    String pass = server.arg("pass");
+    if (ssid.length() == 0) {
+      server.send(400, "text/html; charset=utf-8",
+                  "<meta charset='utf-8'>請輸入 WiFi 名稱 (SSID)。");
+      return;
+    }
+    server.send(200, "text/html; charset=utf-8",
+                "<meta charset='utf-8'>已儲存，板子正在重新連線到「<b>" + ssid + "</b>」…<br>"
+                "請把手機改連到那個 WiFi，等約 10 秒後再開新的 IP（Serial Monitor 會印出新 IP）。");
+    delay(500);
+    // WiFi.begin 會把帳密寫進板子 NVS；重開後 setup() 的 autoConnect 就會自動連這個
+    WiFi.persistent(true);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    delay(1000);
+    ESP.restart();
   });
 
   server.on("/resetwifi", HTTP_GET, []() {
